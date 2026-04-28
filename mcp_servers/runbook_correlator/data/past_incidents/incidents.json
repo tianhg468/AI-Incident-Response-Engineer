@@ -1,0 +1,176 @@
+[
+  {
+    "incident_id": "INC-2024-001",
+    "service": "payment-service",
+    "timestamp": "2024-01-10T14:30:00Z",
+    "severity": "critical",
+    "symptoms": "Pods crashing with OOM errors, memory usage at 95% of limit. Containers getting OOMKilled with exit code 137. Payment processing completely down.",
+    "error_messages": [
+      "java.lang.OutOfMemoryError: Java heap space",
+      "Container payment-service was OOM killed",
+      "Back-off restarting failed container"
+    ],
+    "root_cause": "Memory limit reduced from 2Gi to 512Mi in deployment configuration as part of cost optimization effort. Application baseline memory requirement is ~800MB.",
+    "resolution": "Rolled back deployment to previous version with 2Gi memory limit. Created action item to properly load test before changing resource limits.",
+    "duration_minutes": 45,
+    "tags": ["oom", "memory", "deployment", "configuration"],
+    "metadata": {
+      "detected_by": "automated_alert",
+      "resolved_by": "alice@example.com",
+      "related_pr": 456,
+      "related_commit": "abc123def456"
+    }
+  },
+  {
+    "incident_id": "INC-2024-002",
+    "service": "auth-service",
+    "timestamp": "2023-12-15T09:45:00Z",
+    "severity": "high",
+    "symptoms": "High latency on authentication endpoints, p95 latency increased from 200ms to 3000ms. Database connection pool exhausted. Users experiencing slow logins.",
+    "error_messages": [
+      "Timeout waiting for connection from pool",
+      "HikariCP - Connection is not available",
+      "Request timeout after 5000ms"
+    ],
+    "root_cause": "Database connection pool max size reduced from 50 to 10 in configuration change. Traffic spike from mobile app release overwhelmed small pool.",
+    "resolution": "Increased database connection pool size to 75. Added monitoring for pool utilization. Implemented connection pool metrics alerting.",
+    "duration_minutes": 120,
+    "tags": ["latency", "database", "connection-pool", "configuration"],
+    "metadata": {
+      "detected_by": "monitoring_alert",
+      "resolved_by": "bob@example.com",
+      "related_pr": 423,
+      "related_commit": "def456ghi789"
+    }
+  },
+  {
+    "incident_id": "INC-2023-045",
+    "service": "payment-service",
+    "timestamp": "2023-11-20T16:00:00Z",
+    "severity": "high",
+    "symptoms": "Payment service pods in CrashLoopBackOff state. Application failing to start. Missing environment variables for Stripe API keys. 100% deployment failure.",
+    "error_messages": [
+      "Configuration error: STRIPE_API_KEY not set",
+      "Application failed to start: missing required configuration",
+      "Exiting with code 1"
+    ],
+    "root_cause": "ConfigMap for payment service accidentally deleted during cleanup of old resources. Environment variables not mounted to pods.",
+    "resolution": "Recreated ConfigMap with correct Stripe API keys from backup. Restarted deployment. Added protection to prevent accidental deletion of critical ConfigMaps.",
+    "duration_minutes": 30,
+    "tags": ["configuration", "secrets", "kubernetes", "configmap"],
+    "metadata": {
+      "detected_by": "automated_alert",
+      "resolved_by": "charlie@example.com",
+      "related_issue": 789
+    }
+  },
+  {
+    "incident_id": "INC-2023-032",
+    "service": "order-service",
+    "timestamp": "2023-10-05T11:30:00Z",
+    "severity": "medium",
+    "symptoms": "Intermittent 500 errors on order creation. Error rate spiked to 15%. Orders failing randomly. Database deadlocks detected in logs.",
+    "error_messages": [
+      "Deadlock detected: transaction rolled back",
+      "Lock wait timeout exceeded",
+      "Failed to acquire lock on orders table"
+    ],
+    "root_cause": "New feature introduced database query with poor locking strategy. Multiple concurrent order creates caused deadlocks. Missing database index on frequently queried column.",
+    "resolution": "Optimized query to reduce lock contention. Added missing index on order_status column. Implemented retry logic with exponential backoff for deadlock scenarios.",
+    "duration_minutes": 180,
+    "tags": ["database", "deadlock", "performance", "indexing"],
+    "metadata": {
+      "detected_by": "error_rate_alert",
+      "resolved_by": "david@example.com",
+      "related_pr": 567,
+      "related_commit": "ghi789jkl012"
+    }
+  },
+  {
+    "incident_id": "INC-2023-028",
+    "service": "notification-service",
+    "timestamp": "2023-09-12T08:15:00Z",
+    "severity": "critical",
+    "symptoms": "Complete service outage. All pods failing health checks. DNS resolution failures. Cannot connect to external SMTP service. Zero successful email sends.",
+    "error_messages": [
+      "DNS lookup failed for smtp.sendgrid.net",
+      "UnknownHostException: smtp.sendgrid.net",
+      "Failed to connect to SMTP server"
+    ],
+    "root_cause": "CoreDNS configuration change broke DNS resolution for external domains. Only internal cluster DNS working. Caused by typo in CoreDNS ConfigMap during cluster upgrade.",
+    "resolution": "Reverted CoreDNS ConfigMap to previous working version. Restarted CoreDNS pods. Verified external DNS resolution working. Notification service recovered automatically.",
+    "duration_minutes": 60,
+    "tags": ["dns", "coredns", "network", "kubernetes", "configuration"],
+    "metadata": {
+      "detected_by": "automated_alert",
+      "resolved_by": "eve@example.com",
+      "related_issue": 654,
+      "cluster_version": "1.27"
+    }
+  },
+  {
+    "incident_id": "INC-2023-015",
+    "service": "api-gateway",
+    "timestamp": "2023-08-03T19:45:00Z",
+    "severity": "high",
+    "symptoms": "API gateway returning 503 errors. Upstream connection failures. Backend services unreachable. Circuit breaker tripped on all routes. Zero successful requests.",
+    "error_messages": [
+      "Upstream service unavailable",
+      "Circuit breaker open for route /api/v1/payments",
+      "Connection refused to backend pod"
+    ],
+    "root_cause": "Network policy accidentally blocked traffic between API gateway and backend services. Policy was too restrictive after security hardening changes. Egress rules missing for backend pod CIDR.",
+    "resolution": "Updated network policy to allow traffic from API gateway namespace to backend service namespaces. Verified connectivity restored. Added integration tests for network policies.",
+    "duration_minutes": 45,
+    "tags": ["network", "network-policy", "connectivity", "kubernetes"],
+    "metadata": {
+      "detected_by": "monitoring_alert",
+      "resolved_by": "frank@example.com",
+      "related_pr": 789,
+      "related_commit": "jkl012mno345"
+    }
+  },
+  {
+    "incident_id": "INC-2023-009",
+    "service": "payment-service",
+    "timestamp": "2023-07-15T13:20:00Z",
+    "severity": "critical",
+    "symptoms": "Sudden spike in error rate to 80%. Payments timing out. CPU usage maxed at 100%. Slow query detected in database. Payment processing severely degraded.",
+    "error_messages": [
+      "Query execution exceeded timeout of 30s",
+      "Slow query detected: SELECT * FROM payments WHERE created_at > NOW()",
+      "CPU throttling detected on pods"
+    ],
+    "root_cause": "Database migration removed critical index on payments table. Full table scan on every query. Migration was deployed without proper testing on production-sized dataset.",
+    "resolution": "Emergency rollback of database migration. Recreated missing index. Optimized query to use index hints. Added query performance testing to CI/CD pipeline.",
+    "duration_minutes": 90,
+    "tags": ["database", "performance", "indexing", "migration"],
+    "metadata": {
+      "detected_by": "error_rate_alert",
+      "resolved_by": "grace@example.com",
+      "related_pr": 901,
+      "related_commit": "mno345pqr678"
+    }
+  },
+  {
+    "incident_id": "INC-2023-003",
+    "service": "user-service",
+    "timestamp": "2023-06-01T10:30:00Z",
+    "severity": "medium",
+    "symptoms": "Intermittent 429 rate limit errors. Users getting locked out. Redis connection failures. Session storage failing. Authentication working but session persistence broken.",
+    "error_messages": [
+      "Connection refused to redis://redis-cluster:6379",
+      "Redis connection timeout",
+      "Failed to store session: connection error"
+    ],
+    "root_cause": "Redis cluster nodes scaled down automatically by HPA during low-traffic period. Connection pool still pointing to old pod IPs. DNS TTL too high causing stale connections.",
+    "resolution": "Disabled HPA for Redis cluster (stateful service should not autoscale). Configured connection pool to use service DNS name instead of pod IPs. Lowered DNS TTL for Redis service.",
+    "duration_minutes": 75,
+    "tags": ["redis", "autoscaling", "dns", "session-storage"],
+    "metadata": {
+      "detected_by": "user_report",
+      "resolved_by": "henry@example.com",
+      "related_issue": 432
+    }
+  }
+]

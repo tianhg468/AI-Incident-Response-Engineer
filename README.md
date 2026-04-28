@@ -140,7 +140,7 @@ python -m agent.graph
 
 ## Development Status
 
-**Current Phase:** Step 2 - Mock MCP servers ✅
+**Current Phase:** Step 3 - Custom Runbook Correlator MCP Server ✅
 
 - [x] State types defined
 - [x] Skeleton graph with no-op nodes
@@ -149,7 +149,11 @@ python -m agent.graph
 - [x] Mock MCP servers (Kubernetes, GitHub, Slack, Observability)
 - [x] MCP server registry with mode switching (eval/live)
 - [x] Sample scenario with fixtures (oom_after_deploy)
-- [ ] Custom Runbook Correlator MCP server
+- [x] Custom Runbook Correlator MCP server
+  - [x] find_runbook tool (markdown corpus with YAML frontmatter)
+  - [x] correlate_deploys tool (multi-factor suspicion scoring)
+  - [x] similar_past_incidents tool (vector search with sentence-transformers + FAISS)
+  - [x] Comprehensive protocol-level documentation
 - [ ] End-to-end happy path
 - [ ] Verification loop with backtracking
 - [ ] Human-in-the-loop approval
