@@ -140,7 +140,7 @@ python -m agent.graph
 
 ## Development Status
 
-**Current Phase:** Step 4 - End-to-end Happy Path ✅
+**Current Phase:** Step 5 - Verification Loop with Backtracking ✅
 
 - [x] State types defined
 - [x] Skeleton graph with no-op nodes
@@ -162,7 +162,14 @@ python -m agent.graph
   - [x] Recovery proposal auto-approves in eval mode
   - [x] Execution and post-mortem complete workflow
   - [x] Full test scenario runner
-- [ ] Verification loop with backtracking (refuted hypotheses)
+- [x] **Verification loop with backtracking** ⭐ KEY DIFFERENTIATOR
+  - [x] Real verification using LLM and targeted checks
+  - [x] Falsification criteria applied strictly
+  - [x] Refuted hypotheses trigger backtracking to diagnosis
+  - [x] Confirmed hypotheses proceed to recovery
+  - [x] Escalation after max rounds (5 total, 3 inconclusive)
+  - [x] Non-linear graph execution demonstrated
+  - [x] Test suite validating backtracking behavior
 - [ ] Human-in-the-loop approval (live mode)
 - [ ] Checkpointing + resumability
 - [ ] Eval harness with scoring

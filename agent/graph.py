@@ -27,9 +27,9 @@ def route_after_verification(state: AgentState) -> Literal["diagnosis", "recover
     - refuted → back to diagnosis (try next hypothesis or generate new ones)
     - confirmed → proceed to recovery_proposal
     - inconclusive after N rounds → escalate to human
+
+    This is the KEY non-linear routing that enables backtracking.
     """
-    # TODO: Implement actual routing logic based on verification results
-    # For now, always route to recovery_proposal
     verification_results = state.get("verification_results", [])
 
     if not verification_results:
