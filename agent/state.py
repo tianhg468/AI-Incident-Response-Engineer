@@ -55,8 +55,10 @@ class RecoveryProposal(TypedDict):
     blast_radius: str  # Impact assessment
     dry_run_output: Optional[str]
     commands: list[str]  # Actual commands/API calls to execute
-    approval_status: Literal["pending", "approved", "rejected"]
+    approval_status: Literal["pending", "approved", "rejected", "timeout"]
     approval_reasoning: Optional[str]
+    decided_by: Optional[str]  # Who approved/rejected (user ID, "auto-approve", etc.)
+    approval_method: Optional[str]  # How approved (slack, cli, auto_approve)
 
 
 class ExecutionResult(TypedDict):

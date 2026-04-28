@@ -6,7 +6,7 @@ This document tracks the implementation progress of the AI Incident Response Eng
 
 ---
 
-## ✅ Completed: Steps 1-5
+## ✅ Completed: Steps 1-6
 
 ### Step 1: State Types & Skeleton Graph ✅
 
@@ -155,15 +155,66 @@ This document tracks the implementation progress of the AI Incident Response Eng
 
 ---
 
+### Step 6: Human-in-the-Loop Approval Flow ✅
+
+**Completed:** Safety gate with allowlist and approval mechanisms
+
+**Files Created/Updated:**
+- `agent/config/approval_config.py` - Action type allowlist with risk levels
+- `agent/utils/approval_handler.py` - ApprovalHandler with Slack/CLI fallback
+- `agent/nodes/recovery_proposal.py` - Updated to use ApprovalHandler
+- `agent/state.py` - Enhanced RecoveryProposal with approval metadata
+- `tests/test_approval_flow.py` - Comprehensive approval flow tests
+
+**Implementation:**
+- **Action Allowlist:** Hard-coded list of permitted action types
+  - 5 action types: rollback, scale, restart, config_change, patch
+  - Each with risk_level, requires_approval, can_auto_approve_in_eval
+  - Novel actions not in list always escalate to human review
+- **Approval Workflow:**
+  - Primary: Slack interactive buttons via MCP
+  - Fallback: CLI prompt with yes/no
+  - Auto-approve in eval mode for deterministic testing
+- **Approval Handler Features:**
+  - `request_approval()` - Main entry point with validation
+  - `_request_slack_approval()` - Posts to Slack via mock/real MCP
+  - `_wait_for_slack_approval()` - Polls for response (5min timeout)
+  - `_request_cli_approval()` - Interactive terminal prompt
+- **State Tracking:**
+  - Full audit trail: status, reasoning, decided_by, method
+  - Supports: approved, rejected, pending, timeout statuses
+  - Logged to RecoveryProposal in agent state
+
+**Key Achievement:**
+- **Production-ready safety gate** - prevents unauthorized actions
+- **Mode-aware approval** - auto-approves in eval, requires human in live
+- **Comprehensive metadata** - full audit trail for compliance
+- **Graceful fallbacks** - Slack → CLI → timeout
+
+**Statistics:**
+- ~400 lines of approval handling code
+- 5 action types in allowlist
+- 3 approval methods (Slack, CLI, auto)
+- 4 possible statuses (approved, rejected, pending, timeout)
+
+**Testing:**
+- Action type allowlist validation
+- Auto-approval in eval mode
+- Approval metadata completeness
+- Integration with recovery_proposal node
+- End-to-end workflow with approval gate
+
+---
+
 ## Implementation Metrics
 
 ### Lines of Code
-- **Agent Core:** ~1500 lines (state, graph, nodes, utils)
+- **Agent Core:** ~1900 lines (state, graph, nodes, utils, approval)
 - **Mock MCP Servers:** ~2000 lines
 - **Custom MCP Server:** ~1200 lines
-- **Tests:** ~400 lines
+- **Tests:** ~550 lines
 - **Documentation:** ~1500 lines (README, protocol docs, prompts)
-- **Total:** ~6600 lines
+- **Total:** ~7150 lines
 
 ### Test Coverage
 - Skeleton graph execution ✅
@@ -171,6 +222,9 @@ This document tracks the implementation progress of the AI Incident Response Eng
 - Happy path end-to-end ✅
 - Verification loop backtracking ✅
 - Escalation logic ✅
+- Approval flow (auto-approve in eval mode) ✅
+- Action type allowlist validation ✅
+- Approval metadata completeness ✅
 
 ### MCP Server Tools
 - **Mock Servers:** 19 tools across 4 services
@@ -221,6 +275,9 @@ python tests/test_happy_path.py
 
 # Verification loop
 python tests/test_verification_loop.py
+
+# Approval flow
+python tests/test_approval_flow.py
 
 # Mock servers
 python tests/test_mock_mcp_servers.py

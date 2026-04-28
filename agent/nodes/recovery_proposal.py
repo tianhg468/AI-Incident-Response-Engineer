@@ -2,6 +2,7 @@
 
 import os
 from agent.state import AgentState, RecoveryProposal
+from agent.utils.approval_handler import ApprovalHandler
 
 
 def recovery_proposal_node(state: AgentState) -> AgentState:
@@ -52,29 +53,46 @@ def recovery_proposal_node(state: AgentState) -> AgentState:
 
     # Determine action based on hypothesis
     action_type = "rollback"  # Default for deployment-related issues
+    expected_effect = "Service should recover to normal operation after rollback"
+    blast_radius = f"Medium - affects all pods of {service}"
+    commands = [f"kubectl rollout undo deployment/{service} -n default"]
 
-    # Placeholder recovery proposal
-    mode = os.getenv("MODE", "eval")
-    auto_approve = mode == "eval"  # Auto-approve in eval mode
+    # Request approval via ApprovalHandler
+    approval_handler = ApprovalHandler()
+    approval_result = approval_handler.request_approval(
+        action_type=action_type,
+        description=description,
+        expected_effect=expected_effect,
+        blast_radius=blast_radius,
+        commands=commands,
+        dry_run_output=None  # Would be populated in real implementation
+    )
 
+    # Build recovery proposal with approval result
     recovery_proposal: RecoveryProposal = {
         "action_type": action_type,
         "description": description,
-        "expected_effect": "Service should recover to normal operation after rollback",
-        "blast_radius": f"Medium - affects all pods of {service}",
-        "dry_run_output": None,  # Would be populated in real implementation
-        "commands": [f"kubectl rollout undo deployment/{service} -n default"],
-        "approval_status": "approved" if auto_approve else "pending",
-        "approval_reasoning": "Auto-approved in eval mode" if auto_approve else None
+        "expected_effect": expected_effect,
+        "blast_radius": blast_radius,
+        "dry_run_output": None,
+        "commands": commands,
+        "approval_status": approval_result["status"],
+        "approval_reasoning": approval_result.get("reasoning"),
+        "decided_by": approval_result.get("decided_by"),
+        "approval_method": approval_result.get("method")
     }
 
     print(f"   Proposed action: {recovery_proposal['action_type']}")
     print(f"   Blast radius: {recovery_proposal['blast_radius']}")
 
-    if auto_approve:
-        print("   ✓ Auto-approved (eval mode)")
+    if approval_result["status"] == "approved":
+        print(f"   ✓ Approved ({approval_result.get('method', 'unknown')}): {approval_result.get('reasoning')}")
+    elif approval_result["status"] == "rejected":
+        print(f"   ✗ Rejected ({approval_result.get('method', 'unknown')}): {approval_result.get('reasoning')}")
+    elif approval_result["status"] == "timeout":
+        print(f"   ⏱️  Timeout: {approval_result.get('reasoning')}")
     else:
-        print("   ⏸️  Awaiting human approval...")
+        print(f"   ⏸️  Awaiting approval...")
 
     return {
         **state,

@@ -140,7 +140,7 @@ python -m agent.graph
 
 ## Development Status
 
-**Current Phase:** Step 5 - Verification Loop with Backtracking ✅
+**Current Phase:** Step 6 - Human-in-the-Loop Approval ✅
 
 - [x] State types defined
 - [x] Skeleton graph with no-op nodes
@@ -170,7 +170,13 @@ python -m agent.graph
   - [x] Escalation after max rounds (5 total, 3 inconclusive)
   - [x] Non-linear graph execution demonstrated
   - [x] Test suite validating backtracking behavior
-- [ ] Human-in-the-loop approval (live mode)
+- [x] **Human-in-the-loop approval flow** 🔒 SAFETY GATE
+  - [x] Action type allowlist with risk levels
+  - [x] ApprovalHandler with Slack/CLI fallback
+  - [x] Auto-approval in eval mode for testing
+  - [x] Full audit trail (status, reasoning, decided_by, method)
+  - [x] Integration with recovery_proposal node
+  - [x] Comprehensive test coverage
 - [ ] Checkpointing + resumability
 - [ ] Eval harness with scoring
 - [ ] Real MCP integrations
