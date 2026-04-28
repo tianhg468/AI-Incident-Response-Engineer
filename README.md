@@ -140,7 +140,7 @@ python -m agent.graph
 
 ## Development Status
 
-**Current Phase:** Step 3 - Custom Runbook Correlator MCP Server ✅
+**Current Phase:** Step 4 - End-to-end Happy Path ✅
 
 - [x] State types defined
 - [x] Skeleton graph with no-op nodes
@@ -154,11 +154,18 @@ python -m agent.graph
   - [x] correlate_deploys tool (multi-factor suspicion scoring)
   - [x] similar_past_incidents tool (vector search with sentence-transformers + FAISS)
   - [x] Comprehensive protocol-level documentation
-- [ ] End-to-end happy path
-- [ ] Verification loop with backtracking
-- [ ] Human-in-the-loop approval
+- [x] End-to-end happy path
+  - [x] Intake node loads incident from scenario
+  - [x] Evidence gathering calls mock MCP servers
+  - [x] Diagnosis generates hypotheses using LLM
+  - [x] Verification confirms first hypothesis
+  - [x] Recovery proposal auto-approves in eval mode
+  - [x] Execution and post-mortem complete workflow
+  - [x] Full test scenario runner
+- [ ] Verification loop with backtracking (refuted hypotheses)
+- [ ] Human-in-the-loop approval (live mode)
 - [ ] Checkpointing + resumability
-- [ ] Eval harness
+- [ ] Eval harness with scoring
 - [ ] Real MCP integrations
 - [ ] Dashboard
 

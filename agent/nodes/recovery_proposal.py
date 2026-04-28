@@ -1,5 +1,6 @@
 """Recovery proposal node: Draft remediation actions."""
 
+import os
 from agent.state import AgentState, RecoveryProposal
 
 
@@ -45,21 +46,35 @@ def recovery_proposal_node(state: AgentState) -> AgentState:
     else:
         description = f"Remediation for: {confirmed_hypothesis['description']}"
 
+    # Get service name
+    incident = state.get("incident", {})
+    service = incident.get("service", "unknown-service")
+
+    # Determine action based on hypothesis
+    action_type = "rollback"  # Default for deployment-related issues
+
     # Placeholder recovery proposal
+    mode = os.getenv("MODE", "eval")
+    auto_approve = mode == "eval"  # Auto-approve in eval mode
+
     recovery_proposal: RecoveryProposal = {
-        "action_type": "restart",
+        "action_type": action_type,
         "description": description,
-        "expected_effect": "Service should recover to normal operation",
-        "blast_radius": "Low - only affects specified pods",
+        "expected_effect": "Service should recover to normal operation after rollback",
+        "blast_radius": f"Medium - affects all pods of {service}",
         "dry_run_output": None,  # Would be populated in real implementation
-        "commands": ["kubectl rollout restart deployment/placeholder-service"],
-        "approval_status": "pending",
-        "approval_reasoning": None
+        "commands": [f"kubectl rollout undo deployment/{service} -n default"],
+        "approval_status": "approved" if auto_approve else "pending",
+        "approval_reasoning": "Auto-approved in eval mode" if auto_approve else None
     }
 
     print(f"   Proposed action: {recovery_proposal['action_type']}")
     print(f"   Blast radius: {recovery_proposal['blast_radius']}")
-    print("   ⏸️  Awaiting human approval...")
+
+    if auto_approve:
+        print("   ✓ Auto-approved (eval mode)")
+    else:
+        print("   ⏸️  Awaiting human approval...")
 
     return {
         **state,
