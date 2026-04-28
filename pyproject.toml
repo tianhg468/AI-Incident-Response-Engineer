@@ -1,0 +1,95 @@
+[project]
+name = "ai-incident-response"
+version = "0.1.0"
+description = "Autonomous AI agent for Kubernetes incident triage, diagnosis, and remediation"
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+requires-python = ">=3.11"
+dependencies = [
+    # LangGraph and AI
+    "langgraph>=0.2.0",
+    "langchain>=0.3.0",
+    "anthropic>=0.39.0",
+
+    # MCP (Model Context Protocol)
+    "mcp>=1.0.0",
+
+    # Web framework
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+
+    # Dashboard
+    "streamlit>=1.40.0",
+
+    # Data handling
+    "pydantic>=2.10.0",
+    "python-dotenv>=1.0.0",
+
+    # Database (for checkpointing)
+    "psycopg2-binary>=2.9.10",
+    "sqlalchemy>=2.0.0",
+
+    # Utilities
+    "httpx>=0.28.0",
+    "pyyaml>=6.0.2",
+
+    # Embeddings (for similar incidents search)
+    "sentence-transformers>=3.3.0",
+    "faiss-cpu>=1.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "black>=24.10.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+]
+ignore = [
+    "E501",  # line too long (handled by black)
+]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "evals"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+asyncio_mode = "auto"
+addopts = "-v --cov=agent --cov=mcp_servers --cov-report=term-missing"

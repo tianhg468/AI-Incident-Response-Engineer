@@ -1,0 +1,38 @@
+[
+  {
+    "number": 456,
+    "title": "Cost optimization: Reduce payment-service memory allocation",
+    "state": "merged",
+    "author": "deploy-bot",
+    "created_at": "2024-01-15T09:00:00Z",
+    "updated_at": "2024-01-15T09:25:00Z",
+    "merged_at": "2024-01-15T09:25:00Z",
+    "body": "As part of our cost optimization initiative, reducing memory limits for payment-service.\n\nCurrent usage shows average memory at ~400MB, so reducing from 2Gi to 512Mi should be safe.\n\n**Cost savings**: ~$300/month",
+    "labels": ["cost-optimization", "infrastructure"],
+    "commits": ["abc123def456"]
+  },
+  {
+    "number": 445,
+    "title": "Fix payment processor timeout handling",
+    "state": "merged",
+    "author": "alice",
+    "created_at": "2024-01-14T13:00:00Z",
+    "updated_at": "2024-01-14T14:45:00Z",
+    "merged_at": "2024-01-14T14:45:00Z",
+    "body": "Fixes timeout issues when payment processors are slow to respond.\n\nAdds retry logic with exponential backoff.",
+    "labels": ["bug-fix", "payment"],
+    "commits": ["def789abc012"]
+  },
+  {
+    "number": 440,
+    "title": "Add payment processing metrics",
+    "state": "merged",
+    "author": "bob",
+    "created_at": "2024-01-13T09:00:00Z",
+    "updated_at": "2024-01-13T11:00:00Z",
+    "merged_at": "2024-01-13T11:00:00Z",
+    "body": "Adds prometheus metrics for payment processing duration and success rates.",
+    "labels": ["observability", "metrics"],
+    "commits": ["789ghi456jkl"]
+  }
+]

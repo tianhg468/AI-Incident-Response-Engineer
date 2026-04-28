@@ -1,0 +1,111 @@
+[
+  {
+    "metadata": {
+      "name": "payment-service",
+      "namespace": "default",
+      "creationTimestamp": "2024-01-10T10:00:00Z"
+    },
+    "spec": {
+      "replicas": 3,
+      "selector": {
+        "matchLabels": {
+          "app": "payment-service"
+        }
+      },
+      "template": {
+        "metadata": {
+          "labels": {
+            "app": "payment-service",
+            "version": "v2.1.0"
+          }
+        },
+        "spec": {
+          "containers": [
+            {
+              "name": "payment-service",
+              "image": "myorg/payment-service:v2.1.0",
+              "resources": {
+                "requests": {
+                  "memory": "256Mi",
+                  "cpu": "100m"
+                },
+                "limits": {
+                  "memory": "512Mi",
+                  "cpu": "500m"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "status": {
+      "replicas": 3,
+      "readyReplicas": 1,
+      "availableReplicas": 1,
+      "unavailableReplicas": 2,
+      "conditions": [
+        {
+          "type": "Progressing",
+          "status": "True",
+          "reason": "NewReplicaSetAvailable"
+        },
+        {
+          "type": "Available",
+          "status": "False",
+          "reason": "MinimumReplicasUnavailable",
+          "message": "Deployment does not have minimum availability"
+        }
+      ]
+    },
+    "rolloutHistory": [
+      {
+        "revision": 3,
+        "deployedAt": "2024-01-15T09:55:00Z",
+        "image": "myorg/payment-service:v2.1.0",
+        "changes": [
+          {
+            "field": "spec.template.spec.containers[0].resources.limits.memory",
+            "from": "2Gi",
+            "to": "512Mi",
+            "reason": "Cost optimization - reduce memory allocation"
+          },
+          {
+            "field": "spec.template.spec.containers[0].resources.requests.memory",
+            "from": "1Gi",
+            "to": "256Mi",
+            "reason": "Cost optimization"
+          }
+        ],
+        "deployedBy": "deploy-bot",
+        "prNumber": 456,
+        "commitSha": "abc123def456"
+      },
+      {
+        "revision": 2,
+        "deployedAt": "2024-01-14T15:00:00Z",
+        "image": "myorg/payment-service:v2.0.9",
+        "changes": [
+          {
+            "field": "spec.template.spec.containers[0].image",
+            "from": "myorg/payment-service:v2.0.8",
+            "to": "myorg/payment-service:v2.0.9",
+            "reason": "Bug fix release"
+          }
+        ],
+        "deployedBy": "alice@example.com",
+        "prNumber": 445,
+        "commitSha": "def789abc012"
+      },
+      {
+        "revision": 1,
+        "deployedAt": "2024-01-10T10:00:00Z",
+        "image": "myorg/payment-service:v2.0.8",
+        "changes": [],
+        "deployedBy": "bob@example.com",
+        "prNumber": null,
+        "commitSha": "initial"
+      }
+    ]
+  }
+]

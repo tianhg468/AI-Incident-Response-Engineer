@@ -1,0 +1,10 @@
+{
+  "auto_approve": true,
+  "approval_delay_seconds": 0,
+  "default_channel": "#incidents",
+  "notification_settings": {
+    "post_on_start": true,
+    "post_on_completion": true,
+    "post_on_escalation": true
+  }
+}

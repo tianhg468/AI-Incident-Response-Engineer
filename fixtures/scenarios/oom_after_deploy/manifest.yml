@@ -1,0 +1,41 @@
+name: "OOM after deploy"
+description: "Memory limit reduced in recent deployment causing OOM kills and pod crash loops"
+
+ground_truth:
+  root_cause: "Memory limit reduced from 2Gi to 512Mi in deployment manifest"
+  contributing_factors:
+    - "No load testing after configuration change"
+    - "Memory limit set below application baseline requirements"
+  acceptable_remediations:
+    - "rollback"
+    - "scale_up_memory"
+    - "restart"  # Temporary, won't fix root cause
+  verification_steps_expected: 2
+
+incident:
+  service: "payment-service"
+  severity: "high"
+  alert_type: "pod_crash_loop"
+  time_window:
+    start: "2024-01-15T10:00:00Z"
+    end: "2024-01-15T10:30:00Z"
+  affected_pods:
+    - "payment-service-7d9f8b6c4-xk2p9"
+    - "payment-service-7d9f8b6c4-9m4j7"
+    - "payment-service-7d9f8b6c4-h5w8k"
+  affected_endpoints:
+    - "/api/v1/payments"
+    - "/api/v1/checkout"
+
+expected_agent_behavior:
+  hypothesis_1:
+    description: "Recent deployment reduced memory limits causing OOM"
+    should_be_confirmed: true
+    verification_checks:
+      - "Check deployment history"
+      - "Compare memory limits in current vs previous deployment"
+      - "Check OOM events in pod events"
+  hypothesis_2:
+    description: "Traffic spike overwhelming service"
+    should_be_refuted: true
+    falsification: "Request rate is normal, not elevated"

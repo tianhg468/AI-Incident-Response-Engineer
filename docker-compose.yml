@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # Postgres for LangGraph checkpointing
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: incident_user
+      POSTGRES_PASSWORD: incident_pass
+      POSTGRES_DB: incident_response
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U incident_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Mock observability data generator (for evals)
+  # This simulates metrics/logs that would come from real observability tools
+  mock_observability:
+    build:
+      context: ./mocks
+      dockerfile: Dockerfile.observability
+    ports:
+      - "9090:9090"  # Prometheus-compatible
+    depends_on:
+      - postgres
+    profiles:
+      - eval
+
+  # Optional: Local Grafana for testing
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    profiles:
+      - dev
+
+volumes:
+  postgres_data:
+  grafana_data:

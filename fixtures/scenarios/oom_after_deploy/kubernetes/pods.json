@@ -1,0 +1,152 @@
+[
+  {
+    "metadata": {
+      "name": "payment-service-7d9f8b6c4-xk2p9",
+      "namespace": "default",
+      "labels": {
+        "app": "payment-service",
+        "version": "v2.1.0"
+      },
+      "creationTimestamp": "2024-01-15T09:55:00Z"
+    },
+    "spec": {
+      "containers": [
+        {
+          "name": "payment-service",
+          "image": "myorg/payment-service:v2.1.0",
+          "resources": {
+            "requests": {
+              "memory": "256Mi",
+              "cpu": "100m"
+            },
+            "limits": {
+              "memory": "512Mi",
+              "cpu": "500m"
+            }
+          }
+        }
+      ]
+    },
+    "status": {
+      "phase": "CrashLoopBackOff",
+      "containerStatuses": [
+        {
+          "name": "payment-service",
+          "ready": false,
+          "restartCount": 8,
+          "state": {
+            "waiting": {
+              "reason": "CrashLoopBackOff",
+              "message": "Back-off 5m0s restarting failed container"
+            }
+          },
+          "lastState": {
+            "terminated": {
+              "exitCode": 137,
+              "reason": "OOMKilled",
+              "startedAt": "2024-01-15T10:20:00Z",
+              "finishedAt": "2024-01-15T10:22:00Z"
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "metadata": {
+      "name": "payment-service-7d9f8b6c4-9m4j7",
+      "namespace": "default",
+      "labels": {
+        "app": "payment-service",
+        "version": "v2.1.0"
+      },
+      "creationTimestamp": "2024-01-15T09:55:00Z"
+    },
+    "spec": {
+      "containers": [
+        {
+          "name": "payment-service",
+          "image": "myorg/payment-service:v2.1.0",
+          "resources": {
+            "requests": {
+              "memory": "256Mi",
+              "cpu": "100m"
+            },
+            "limits": {
+              "memory": "512Mi",
+              "cpu": "500m"
+            }
+          }
+        }
+      ]
+    },
+    "status": {
+      "phase": "CrashLoopBackOff",
+      "containerStatuses": [
+        {
+          "name": "payment-service",
+          "ready": false,
+          "restartCount": 7,
+          "state": {
+            "waiting": {
+              "reason": "CrashLoopBackOff",
+              "message": "Back-off 2m40s restarting failed container"
+            }
+          },
+          "lastState": {
+            "terminated": {
+              "exitCode": 137,
+              "reason": "OOMKilled",
+              "startedAt": "2024-01-15T10:18:00Z",
+              "finishedAt": "2024-01-15T10:20:00Z"
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "metadata": {
+      "name": "payment-service-6c8f5b9d2-p4k3m",
+      "namespace": "default",
+      "labels": {
+        "app": "payment-service",
+        "version": "v2.0.9"
+      },
+      "creationTimestamp": "2024-01-14T15:00:00Z"
+    },
+    "spec": {
+      "containers": [
+        {
+          "name": "payment-service",
+          "image": "myorg/payment-service:v2.0.9",
+          "resources": {
+            "requests": {
+              "memory": "1Gi",
+              "cpu": "100m"
+            },
+            "limits": {
+              "memory": "2Gi",
+              "cpu": "500m"
+            }
+          }
+        }
+      ]
+    },
+    "status": {
+      "phase": "Running",
+      "containerStatuses": [
+        {
+          "name": "payment-service",
+          "ready": true,
+          "restartCount": 0,
+          "state": {
+            "running": {
+              "startedAt": "2024-01-14T15:00:30Z"
+            }
+          }
+        }
+      ]
+    }
+  }
+]

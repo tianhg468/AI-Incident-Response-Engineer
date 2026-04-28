@@ -1,0 +1,112 @@
+[
+  {
+    "name": "container_memory_usage_bytes",
+    "labels": {
+      "pod": "payment-service-7d9f8b6c4-xk2p9",
+      "container": "payment-service",
+      "namespace": "default"
+    },
+    "values": [
+      {"timestamp": "2024-01-15T10:00:00Z", "value": 268435456},
+      {"timestamp": "2024-01-15T10:01:00Z", "value": 402653184},
+      {"timestamp": "2024-01-15T10:01:30Z", "value": 503316480},
+      {"timestamp": "2024-01-15T10:01:58Z", "value": 536870912}
+    ]
+  },
+  {
+    "name": "container_memory_usage_bytes",
+    "labels": {
+      "pod": "payment-service-6c8f5b9d2-p4k3m",
+      "container": "payment-service",
+      "namespace": "default"
+    },
+    "values": [
+      {"timestamp": "2024-01-15T10:00:00Z", "value": 891289600},
+      {"timestamp": "2024-01-15T10:05:00Z", "value": 901775360},
+      {"timestamp": "2024-01-15T10:10:00Z", "value": 895483904},
+      {"timestamp": "2024-01-15T10:15:00Z", "value": 887619584}
+    ]
+  },
+  {
+    "name": "http_requests_total",
+    "labels": {
+      "service": "payment-service",
+      "status": "200"
+    },
+    "values": [
+      {"timestamp": "2024-01-15T10:00:00Z", "value": 1250},
+      {"timestamp": "2024-01-15T10:05:00Z", "value": 1280},
+      {"timestamp": "2024-01-15T10:10:00Z", "value": 1290},
+      {"timestamp": "2024-01-15T10:15:00Z", "value": 1310}
+    ]
+  },
+  {
+    "name": "http_requests_total",
+    "labels": {
+      "service": "payment-service",
+      "status": "500"
+    },
+    "values": [
+      {"timestamp": "2024-01-15T09:55:00Z", "value": 0},
+      {"timestamp": "2024-01-15T10:00:00Z", "value": 5},
+      {"timestamp": "2024-01-15T10:05:00Z", "value": 28},
+      {"timestamp": "2024-01-15T10:10:00Z", "value": 45},
+      {"timestamp": "2024-01-15T10:15:00Z", "value": 52}
+    ]
+  },
+  {
+    "name": "http_request_duration_seconds",
+    "labels": {
+      "service": "payment-service",
+      "quantile": "0.5"
+    },
+    "values": [
+      {"timestamp": "2024-01-15T10:00:00Z", "value": 0.125},
+      {"timestamp": "2024-01-15T10:05:00Z", "value": 0.128},
+      {"timestamp": "2024-01-15T10:10:00Z", "value": 0.132},
+      {"timestamp": "2024-01-15T10:15:00Z", "value": 0.130}
+    ]
+  },
+  {
+    "name": "http_request_duration_seconds",
+    "labels": {
+      "service": "payment-service",
+      "quantile": "0.95"
+    },
+    "values": [
+      {"timestamp": "2024-01-15T10:00:00Z", "value": 0.450},
+      {"timestamp": "2024-01-15T10:05:00Z", "value": 0.458},
+      {"timestamp": "2024-01-15T10:10:00Z", "value": 0.455},
+      {"timestamp": "2024-01-15T10:15:00Z", "value": 0.460}
+    ]
+  },
+  {
+    "name": "container_cpu_usage_seconds_total",
+    "labels": {
+      "pod": "payment-service-7d9f8b6c4-xk2p9",
+      "container": "payment-service",
+      "namespace": "default"
+    },
+    "values": [
+      {"timestamp": "2024-01-15T10:00:00Z", "value": 120.5},
+      {"timestamp": "2024-01-15T10:01:00Z", "value": 182.3},
+      {"timestamp": "2024-01-15T10:01:30Z", "value": 211.8}
+    ]
+  },
+  {
+    "name": "kube_pod_container_status_restarts_total",
+    "labels": {
+      "pod": "payment-service-7d9f8b6c4-xk2p9",
+      "container": "payment-service",
+      "namespace": "default"
+    },
+    "values": [
+      {"timestamp": "2024-01-15T10:00:00Z", "value": 0},
+      {"timestamp": "2024-01-15T10:02:00Z", "value": 1},
+      {"timestamp": "2024-01-15T10:05:00Z", "value": 3},
+      {"timestamp": "2024-01-15T10:10:00Z", "value": 5},
+      {"timestamp": "2024-01-15T10:15:00Z", "value": 7},
+      {"timestamp": "2024-01-15T10:20:00Z", "value": 8}
+    ]
+  }
+]

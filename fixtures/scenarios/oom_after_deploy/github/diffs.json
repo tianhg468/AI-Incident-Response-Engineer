@@ -1,0 +1,19 @@
+[
+  {
+    "type": "pr",
+    "number": 456,
+    "sha": "abc123def456",
+    "files_changed": ["k8s/payment-service/deployment.yaml"],
+    "additions": 2,
+    "deletions": 2,
+    "diff": "diff --git a/k8s/payment-service/deployment.yaml b/k8s/payment-service/deployment.yaml\nindex 1234567..abcdefg 100644\n--- a/k8s/payment-service/deployment.yaml\n+++ b/k8s/payment-service/deployment.yaml\n@@ -20,8 +20,8 @@ spec:\n         resources:\n           requests:\n-            memory: \"1Gi\"\n+            memory: \"256Mi\"\n             cpu: \"100m\"\n           limits:\n-            memory: \"2Gi\"\n+            memory: \"512Mi\"\n             cpu: \"500m\"\n"
+  },
+  {
+    "type": "commit",
+    "sha": "abc123def456",
+    "files_changed": ["k8s/payment-service/deployment.yaml"],
+    "additions": 2,
+    "deletions": 2,
+    "diff": "diff --git a/k8s/payment-service/deployment.yaml b/k8s/payment-service/deployment.yaml\nindex 1234567..abcdefg 100644\n--- a/k8s/payment-service/deployment.yaml\n+++ b/k8s/payment-service/deployment.yaml\n@@ -20,8 +20,8 @@ spec:\n         resources:\n           requests:\n-            memory: \"1Gi\"\n+            memory: \"256Mi\"\n             cpu: \"100m\"\n           limits:\n-            memory: \"2Gi\"\n+            memory: \"512Mi\"\n             cpu: \"500m\"\n"
+  }
+]
