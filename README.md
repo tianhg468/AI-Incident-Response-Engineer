@@ -99,6 +99,64 @@ This dual-mode architecture enables:
 
 See [`mcp_servers/mock/README.md`](mcp_servers/mock/README.md) for details.
 
+## Live Mode with Real MCP Servers
+
+**The agent can connect to real infrastructure when `MODE=live`.** This enables production incident response with actual Kubernetes clusters, GitHub repositories, Slack workspaces, and observability platforms.
+
+### Quick Start
+
+```bash
+# 1. Set MODE to live
+export MODE=live
+
+# 2. Configure MCP server paths
+export MCP_K8S_SERVER=/path/to/kubernetes-mcp-server
+export MCP_GITHUB_SERVER=/path/to/github-mcp-server
+export MCP_SLACK_SERVER=/path/to/slack-mcp-server
+export MCP_OBSERVABILITY_SERVER=/path/to/observability-mcp-server
+
+# 3. Configure credentials
+export GITHUB_TOKEN=ghp_your_token
+export SLACK_BOT_TOKEN=xoxb_your_token
+export KUBECONFIG=~/.kube/config
+export GRAFANA_API_KEY=your_key
+
+# 4. Run investigation
+python -m agent.graph
+```
+
+### Supported MCP Servers
+
+- **Kubernetes**: Pod status, logs, events, deployments
+- **GitHub**: Commits, PRs, diffs, file content
+- **Slack**: Messages, approvals, notifications
+- **Observability**: Metrics, alerts, service health (Grafana/Datadog/Prometheus)
+- **Runbook Correlator**: Custom server (included)
+
+### How It Works
+
+The `MCPServerRegistry` automatically routes tool calls based on MODE:
+
+```python
+# Agent code is completely agnostic
+from mcp_servers.registry import get_mcp_server
+
+registry = get_mcp_server()  # Reads MODE env var
+result = registry.call_tool("kubernetes", "k8s_get_pod_status", {...})
+
+# MODE=eval → Uses fixture-based mocks
+# MODE=live → Connects to real Kubernetes API
+```
+
+### Setup Guide
+
+See [`mcp_servers/real/README.md`](mcp_servers/real/README.md) for:
+- Installing/building MCP servers
+- Configuration examples for each service
+- Authentication setup
+- Troubleshooting guide
+- Security considerations
+
 ## Checkpointing & Resumability
 
 **Investigations survive process restarts.** LangGraph's checkpointing persists the full agent state to a database, enabling:
@@ -207,7 +265,7 @@ python -m agent.graph
 
 ## Development Status
 
-**Current Phase:** Step 8 - Eval Harness with Scoring ✅
+**Current Phase:** Step 9 - Real MCP Server Integration ✅
 
 - [x] State types defined
 - [x] Skeleton graph with no-op nodes
@@ -258,7 +316,13 @@ python -m agent.graph
   - [x] 5 complete scenarios with varying difficulty
   - [x] Markdown report generation
   - [x] Command-line runner for CI/CD integration
-- [ ] Real MCP integrations
+- [x] **Real MCP server integration** 🔌 LIVE MODE
+  - [x] Stdio transport for real MCP servers
+  - [x] Configuration system for all server types
+  - [x] Support for Kubernetes, GitHub, Slack, Observability
+  - [x] Environment-based configuration
+  - [x] Transparent mode switching (eval/live)
+  - [x] Comprehensive integration documentation
 - [ ] Dashboard
 
 ## Current Eval Scores

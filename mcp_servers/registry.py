@@ -8,6 +8,7 @@ calls tools through the registry, which routes to the appropriate backend.
 """
 
 import os
+import logging
 from typing import Any, Optional, Literal
 from enum import Enum
 
@@ -16,6 +17,9 @@ from mcp_servers.mock.kubernetes import MockKubernetesMCPServer
 from mcp_servers.mock.github import MockGitHubMCPServer
 from mcp_servers.mock.slack import MockSlackMCPServer
 from mcp_servers.mock.observability import MockObservabilityMCPServer
+from mcp_servers.real import RealMCPServerClient, get_all_server_configs
+
+logger = logging.getLogger(__name__)
 
 
 class MCPMode(str, Enum):
@@ -77,18 +81,46 @@ class MCPServerRegistry:
     def _init_live_servers(self):
         """Initialize real MCP servers.
 
-        In live mode, we would connect to actual MCP servers via stdio or HTTP.
-        For now, this is a placeholder.
+        In live mode, we connect to actual MCP servers via stdio transport.
+        Each server runs as a separate process and communicates via JSON-RPC.
         """
-        # TODO: Implement real MCP server connections
-        # This would use the MCP Python SDK to connect to actual servers
-        # running as separate processes or remote services
+        logger.info("Initializing real MCP servers for live mode...")
 
-        # Placeholder - would be replaced with actual MCP client connections
-        raise NotImplementedError(
-            "Live mode not yet implemented. "
-            "Set MODE=eval to use fixture-based mock servers."
-        )
+        # Get server configurations from environment
+        try:
+            configs = get_all_server_configs()
+        except RuntimeError as e:
+            logger.error(f"Failed to get server configs: {e}")
+            raise
+
+        # Create real MCP server clients
+        self._servers = {}
+
+        for service_name, config in configs.items():
+            try:
+                logger.info(f"Configuring {service_name}: {config.description}")
+
+                client = RealMCPServerClient(
+                    service_name=config.service_name,
+                    command=config.command,
+                    args=config.args,
+                    env=config.env,
+                    cwd=config.cwd
+                )
+
+                self._servers[service_name] = client
+
+            except Exception as e:
+                logger.error(f"Failed to configure {service_name} server: {e}")
+                # Continue with other servers even if one fails
+
+        if not self._servers:
+            raise RuntimeError(
+                "No MCP servers could be initialized in live mode. "
+                "Check your environment configuration."
+            )
+
+        logger.info(f"✅ Initialized {len(self._servers)} real MCP servers")
 
     def get_server(self, service: str):
         """Get an MCP server instance by service name.

@@ -6,7 +6,7 @@ This document tracks the implementation progress of the AI Incident Response Eng
 
 ---
 
-## ✅ Completed: Steps 1-8
+## ✅ Completed: Steps 1-9
 
 ### Step 1: State Types & Skeleton Graph ✅
 
@@ -341,16 +341,97 @@ python -m evals.runner --report results/eval_2025.md
 
 ---
 
+### Step 9: Real MCP Server Integration ✅
+
+**Completed:** Live mode support with real MCP server connections via stdio
+
+**Files Created/Updated:**
+- `mcp_servers/real/client.py` - Real MCP server client with stdio transport (~200 lines)
+- `mcp_servers/real/config.py` - Configuration module for all server types (~250 lines)
+- `mcp_servers/real/__init__.py` - Public API exports
+- `mcp_servers/real/README.md` - Comprehensive integration guide (~400 lines)
+- `mcp_servers/registry.py` - Updated to support live mode initialization
+- `.env.example` - Updated with real server configuration options
+
+**Implementation:**
+- **Real MCP Server Client:**
+  - Stdio transport via subprocess (standard MCP communication)
+  - JSON-RPC protocol for tool calls
+  - Lazy server startup on first use
+  - Graceful lifecycle management (start, shutdown, cleanup)
+  - Error handling and reconnection logic
+- **Configuration System:**
+  - Environment-based configuration for each server type
+  - `get_kubernetes_server_config()` - K8s with kubeconfig support
+  - `get_github_server_config()` - GitHub with PAT authentication
+  - `get_slack_server_config()` - Slack with bot token
+  - `get_observability_server_config()` - Multi-provider (Grafana/Datadog/Prometheus)
+  - `get_runbook_correlator_server_config()` - Custom server (included)
+- **Registry Integration:**
+  - `_init_live_servers()` - Initializes real server clients
+  - Transparent mode switching via MODE env var
+  - Agent code completely agnostic to mode
+  - Graceful degradation if some servers unavailable
+- **Server Support:**
+  - Kubernetes: Pod status, logs, events, deployments
+  - GitHub: Commits, PRs, diffs, file content
+  - Slack: Messages, approvals, notifications
+  - Observability: Metrics, alerts, service health
+  - Runbook Correlator: Custom server (included in repo)
+
+**Key Achievement:**
+- **Production-ready live mode** - connects to real infrastructure
+- **Zero agent code changes** - complete mode transparency
+- **Comprehensive documentation** - setup guides for each server type
+- **Flexible configuration** - environment-based, easy to customize
+
+**Statistics:**
+- ~450 lines of real server integration code
+- ~400 lines of integration documentation
+- 5 server types supported (K8s, GitHub, Slack, Observability, Runbook)
+- JSON-RPC stdio transport (MCP standard)
+
+**Documentation:**
+- Complete setup guide in `mcp_servers/real/README.md`
+- Architecture diagrams
+- Configuration examples for each server
+- Troubleshooting guide
+- Security considerations
+- Performance notes
+
+**Usage:**
+```bash
+# Configure real servers
+export MODE=live
+export MCP_K8S_SERVER=/path/to/k8s-server
+export MCP_GITHUB_SERVER=/path/to/github-server
+export GITHUB_TOKEN=ghp_your_token
+# ... (see .env.example for all options)
+
+# Run investigation in live mode
+python -m agent.graph
+```
+
+**Integration Path:**
+1. Install/build MCP servers for your infrastructure
+2. Configure environment variables in `.env`
+3. Test each server individually
+4. Run investigations in live mode
+5. Monitor and tune configurations
+
+---
+
 ## Implementation Metrics
 
 ### Lines of Code
 - **Agent Core:** ~2050 lines (state, graph, nodes, utils, approval, checkpointing)
 - **Mock MCP Servers:** ~2000 lines
+- **Real MCP Integration:** ~450 lines (client, config)
 - **Custom MCP Server:** ~1200 lines
 - **Eval Harness:** ~600 lines (rubric, runner)
 - **Tests:** ~1250 lines
-- **Documentation:** ~2100 lines (README, SPEC, PROGRESS, MCP docs, eval docs)
-- **Total:** ~9200 lines
+- **Documentation:** ~2500 lines (README, SPEC, PROGRESS, MCP docs, eval docs, integration guides)
+- **Total:** ~10050 lines
 
 ### Test Coverage
 - Skeleton graph execution ✅
@@ -459,7 +540,7 @@ python tests/test_mock_mcp_servers.py
 ### Not Yet Implemented
 - [x] Checkpointing + resumability (step 7) ✅
 - [x] Eval harness with scoring (step 8) ✅
-- [ ] Real MCP server integration (step 9)
+- [x] Real MCP server integration (step 9) ✅
 - [ ] Dashboard (step 10)
 - [ ] Webhook endpoint (FastAPI)
 - [ ] Full runbook integration in workflow
@@ -529,14 +610,15 @@ If continuing development, recommended order:
 
 | Metric | Value |
 |--------|-------|
-| Total Lines of Code | ~9,200 |
+| Total Lines of Code | ~10,050 |
 | Agent Nodes | 7 |
-| MCP Tools | 22 |
+| MCP Tools (Mock) | 22 |
+| MCP Servers Supported (Live) | 5 (K8s, GitHub, Slack, Obs, Runbook) |
 | Test Files | 6 |
 | Eval Scenarios | 5 (complete with ground truth) |
-| Documentation Pages | 5 (README, SPEC, PROGRESS, MCP docs, Eval docs) |
-| Time to Complete Steps 1-8 | ~1 session |
+| Documentation Pages | 6 (README, SPEC, PROGRESS, MCP mock, MCP real, Eval) |
+| Time to Complete Steps 1-9 | ~1 session |
 
 ---
 
-*Last Updated: Steps 1-8 Complete (Eval Harness with Scoring)*
+*Last Updated: Steps 1-9 Complete (Real MCP Server Integration)*
