@@ -1,0 +1,22 @@
+{
+  "scenario_id": "oom_after_deploy",
+  "name": "OOM After Deploy",
+  "description": "Pods are OOMKilled after a recent deployment that lowered memory limits",
+  "ground_truth_root_cause": "Memory limits were lowered from 2Gi to 512Mi in the latest deployment, causing pods to exceed their memory allocation",
+  "ground_truth_root_cause_keywords": [
+    "memory",
+    "limit",
+    "lowered",
+    "512Mi",
+    "deployment",
+    "oom"
+  ],
+  "acceptable_remediations": [
+    "rollback",
+    "config_change"
+  ],
+  "expected_verification_rounds": 1,
+  "max_acceptable_rounds": 2,
+  "difficulty": "easy",
+  "incident_type": "oom"
+}

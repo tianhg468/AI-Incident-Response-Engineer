@@ -1,0 +1,21 @@
+{
+  "scenario_id": "5xx_spike_feature_flag",
+  "name": "5xx Spike from Feature Flag",
+  "description": "Sudden spike in 500 errors after a feature flag was enabled",
+  "ground_truth_root_cause": "Feature flag 'new-payment-flow' was enabled causing null pointer exceptions in the payment service",
+  "ground_truth_root_cause_keywords": [
+    "feature flag",
+    "payment",
+    "null pointer",
+    "exception",
+    "enabled"
+  ],
+  "acceptable_remediations": [
+    "config_change",
+    "rollback"
+  ],
+  "expected_verification_rounds": 1,
+  "max_acceptable_rounds": 3,
+  "difficulty": "medium",
+  "incident_type": "5xx_spike"
+}

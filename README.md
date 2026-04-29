@@ -207,7 +207,7 @@ python -m agent.graph
 
 ## Development Status
 
-**Current Phase:** Step 7 - Checkpointing + Resumability ✅
+**Current Phase:** Step 8 - Eval Harness with Scoring ✅
 
 - [x] State types defined
 - [x] Skeleton graph with no-op nodes
@@ -251,20 +251,43 @@ python -m agent.graph
   - [x] Resumability test demonstrating pause/resume
   - [x] Multiple concurrent investigations supported
   - [x] Complete audit trail of all investigations
-- [ ] Eval harness with scoring
+- [x] **Eval harness with scoring** 📊 METRICS
+  - [x] Automated evaluation with scripted scenarios
+  - [x] Ground truth root cause labels
+  - [x] Scoring rubric (root cause, remediation, efficiency, cost)
+  - [x] 5 complete scenarios with varying difficulty
+  - [x] Markdown report generation
+  - [x] Command-line runner for CI/CD integration
 - [ ] Real MCP integrations
 - [ ] Dashboard
 
 ## Current Eval Scores
 
-*(To be populated once eval harness is built)*
+**Eval harness is now built and ready to run!** Execute with:
 
-| Metric | Score |
-|--------|-------|
-| Root Cause Accuracy | TBD |
-| Remediation Acceptability | TBD |
-| Avg Verification Rounds | TBD |
-| Avg Cost per Incident | TBD |
+```bash
+python -m evals.runner
+```
+
+**Target Metrics (Goals):**
+
+| Metric | Target Score |
+|--------|--------------|
+| Root Cause Accuracy (Exact) | ≥ 60% |
+| Root Cause Accuracy (Partial+) | ≥ 80% |
+| Remediation Acceptability | ≥ 75% |
+| Avg Verification Rounds | ≤ 2.5 |
+| Avg Cost per Incident | ≤ $0.015 |
+| Escalation Rate | ≤ 25% |
+
+**Current Scenarios:**
+- oom_after_deploy (Easy)
+- 5xx_spike_feature_flag (Medium)
+- dns_resolution_failure (Hard)
+- slow_query_missing_index (Medium)
+- cascading_failure_timeout (Hard)
+
+See [`evals/README.md`](evals/README.md) for details on the evaluation harness.
 
 ## Limitations
 

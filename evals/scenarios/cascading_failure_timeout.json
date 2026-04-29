@@ -1,0 +1,22 @@
+{
+  "scenario_id": "cascading_failure_timeout",
+  "name": "Cascading Failure - Downstream Timeout",
+  "description": "Service experiencing cascading failures due to increased timeout to downstream payment service",
+  "ground_truth_root_cause": "Payment service timeout was increased from 1s to 30s, causing connection pool exhaustion and cascading failures",
+  "ground_truth_root_cause_keywords": [
+    "timeout",
+    "payment service",
+    "connection pool",
+    "exhaustion",
+    "cascading"
+  ],
+  "acceptable_remediations": [
+    "rollback",
+    "config_change",
+    "restart"
+  ],
+  "expected_verification_rounds": 2,
+  "max_acceptable_rounds": 5,
+  "difficulty": "hard",
+  "incident_type": "cascading_failure"
+}

@@ -1,0 +1,22 @@
+{
+  "scenario_id": "slow_query_missing_index",
+  "name": "Slow Queries - Missing Index",
+  "description": "Database queries becoming very slow after an index was accidentally dropped during migration",
+  "ground_truth_root_cause": "Database migration dropped the index on user_events.timestamp column, causing full table scans",
+  "ground_truth_root_cause_keywords": [
+    "index",
+    "dropped",
+    "migration",
+    "user_events",
+    "timestamp",
+    "full table scan"
+  ],
+  "acceptable_remediations": [
+    "rollback",
+    "config_change"
+  ],
+  "expected_verification_rounds": 2,
+  "max_acceptable_rounds": 4,
+  "difficulty": "medium",
+  "incident_type": "slow_query"
+}

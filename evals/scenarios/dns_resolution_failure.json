@@ -1,0 +1,22 @@
+{
+  "scenario_id": "dns_resolution_failure",
+  "name": "DNS Resolution Failure",
+  "description": "Service unable to resolve DNS names after CoreDNS configuration change",
+  "ground_truth_root_cause": "CoreDNS ConfigMap was updated with incorrect forward rules, breaking DNS resolution for external domains",
+  "ground_truth_root_cause_keywords": [
+    "coredns",
+    "dns",
+    "configmap",
+    "forward",
+    "resolution"
+  ],
+  "acceptable_remediations": [
+    "rollback",
+    "config_change",
+    "restart"
+  ],
+  "expected_verification_rounds": 2,
+  "max_acceptable_rounds": 4,
+  "difficulty": "hard",
+  "incident_type": "dns_failure"
+}

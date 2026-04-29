@@ -6,7 +6,7 @@ This document tracks the implementation progress of the AI Incident Response Eng
 
 ---
 
-## ✅ Completed: Steps 1-7
+## ✅ Completed: Steps 1-8
 
 ### Step 1: State Types & Skeleton Graph ✅
 
@@ -258,15 +258,99 @@ This document tracks the implementation progress of the AI Incident Response Eng
 
 ---
 
+### Step 8: Eval Harness with Scoring ✅
+
+**Completed:** Automated evaluation system with scripted scenarios and ground truth
+
+**Files Created:**
+- `evals/rubric.py` - Scoring logic and metrics calculation (~250 lines)
+- `evals/runner.py` - Eval execution engine (~350 lines)
+- `evals/scenarios/*.json` - 5 scenario definitions with ground truth
+- `tests/test_eval_harness.py` - Comprehensive eval harness tests (~350 lines)
+- `evals/README.md` - Complete evaluation documentation
+
+**Implementation:**
+- **Scenario Definitions:**
+  - Each scenario has ground truth root cause + acceptable remediations
+  - Difficulty levels: easy, medium, hard
+  - Expected vs max acceptable verification rounds
+  - Keywords for root cause matching
+- **Scoring Rubric:**
+  - **Root Cause**: exact (100%) / partial (50%) / wrong (0%)
+  - **Remediation**: acceptable (yes/no) based on action type
+  - **Efficiency**: verification rounds vs expected
+  - **Cost**: estimated USD based on LLM + tool calls
+- **Eval Runner:**
+  - Loads scenarios from JSON definitions
+  - Executes investigations in eval mode
+  - Scores results against ground truth
+  - Generates markdown reports with metrics
+- **Metrics Tracked:**
+  - Root cause accuracy (exact + partial or better)
+  - Remediation acceptability rate
+  - Average verification rounds
+  - Average cost per incident
+  - Escalation rate
+  - Duration per investigation
+
+**Scenarios Created (5 total):**
+1. **oom_after_deploy** (Easy) - Memory limits lowered causing OOM
+2. **5xx_spike_feature_flag** (Medium) - Feature flag causing exceptions
+3. **dns_resolution_failure** (Hard) - CoreDNS config breaking resolution
+4. **slow_query_missing_index** (Medium) - Index dropped in migration
+5. **cascading_failure_timeout** (Hard) - Timeout increase causing cascade
+
+**Key Achievement:**
+- **Deterministic evaluation** - reproducible scenarios with known ground truth
+- **Automated scoring** - no manual review needed
+- **CI/CD ready** - command-line runner for pipeline integration
+- **Progress tracking** - baseline for measuring improvements
+
+**Statistics:**
+- ~600 lines of eval infrastructure code
+- 5 complete scenarios with ground truth
+- 4 scoring dimensions (root cause, remediation, efficiency, cost)
+- Markdown report generation
+
+**Target Metrics (Goals):**
+- Root Cause Accuracy (Exact): ≥ 60%
+- Root Cause Accuracy (Partial+): ≥ 80%
+- Remediation Acceptability: ≥ 75%
+- Avg Verification Rounds: ≤ 2.5
+- Avg Cost per Incident: ≤ $0.015
+- Escalation Rate: ≤ 25%
+
+**Testing:**
+- Eval rubric scoring functions
+- Pass rate calculation
+- Report generation
+- Single scenario execution
+- Full eval suite runner
+
+**Usage:**
+```bash
+# Run all scenarios
+python -m evals.runner
+
+# Run single scenario
+python -m evals.runner --scenario oom_after_deploy
+
+# Custom report path
+python -m evals.runner --report results/eval_2025.md
+```
+
+---
+
 ## Implementation Metrics
 
 ### Lines of Code
 - **Agent Core:** ~2050 lines (state, graph, nodes, utils, approval, checkpointing)
 - **Mock MCP Servers:** ~2000 lines
 - **Custom MCP Server:** ~1200 lines
-- **Tests:** ~900 lines
-- **Documentation:** ~1600 lines (README, protocol docs, prompts)
-- **Total:** ~7750 lines
+- **Eval Harness:** ~600 lines (rubric, runner)
+- **Tests:** ~1250 lines
+- **Documentation:** ~2100 lines (README, SPEC, PROGRESS, MCP docs, eval docs)
+- **Total:** ~9200 lines
 
 ### Test Coverage
 - Skeleton graph execution ✅
@@ -280,6 +364,10 @@ This document tracks the implementation progress of the AI Incident Response Eng
 - Checkpointing and state persistence ✅
 - Resumability after process restart ✅
 - Multiple concurrent investigations ✅
+- Eval harness rubric scoring ✅
+- Eval runner single scenario execution ✅
+- Eval report generation ✅
+- Pass rate calculation ✅
 
 ### MCP Server Tools
 - **Mock Servers:** 19 tools across 4 services
@@ -343,6 +431,12 @@ python tests/test_approval_flow.py
 # Checkpointing and resumability
 python tests/test_checkpointing.py
 
+# Eval harness
+python tests/test_eval_harness.py
+
+# Run full eval suite
+python -m evals.runner
+
 # Mock servers
 python tests/test_mock_mcp_servers.py
 ```
@@ -364,7 +458,7 @@ python tests/test_mock_mcp_servers.py
 
 ### Not Yet Implemented
 - [x] Checkpointing + resumability (step 7) ✅
-- [ ] Eval harness with scoring (step 8)
+- [x] Eval harness with scoring (step 8) ✅
 - [ ] Real MCP server integration (step 9)
 - [ ] Dashboard (step 10)
 - [ ] Webhook endpoint (FastAPI)
@@ -435,14 +529,14 @@ If continuing development, recommended order:
 
 | Metric | Value |
 |--------|-------|
-| Total Lines of Code | ~7,750 |
+| Total Lines of Code | ~9,200 |
 | Agent Nodes | 7 |
 | MCP Tools | 22 |
-| Test Files | 5 |
-| Scenarios | 1 (complete) |
-| Documentation Pages | 4 (README, SPEC, PROGRESS, MCP docs) |
-| Time to Complete Steps 1-7 | ~1 session |
+| Test Files | 6 |
+| Eval Scenarios | 5 (complete with ground truth) |
+| Documentation Pages | 5 (README, SPEC, PROGRESS, MCP docs, Eval docs) |
+| Time to Complete Steps 1-8 | ~1 session |
 
 ---
 
-*Last Updated: Steps 1-7 Complete (Checkpointing + Resumability)*
+*Last Updated: Steps 1-8 Complete (Eval Harness with Scoring)*
