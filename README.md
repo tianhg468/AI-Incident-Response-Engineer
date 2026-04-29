@@ -99,6 +99,73 @@ This dual-mode architecture enables:
 
 See [`mcp_servers/mock/README.md`](mcp_servers/mock/README.md) for details.
 
+## Checkpointing & Resumability
+
+**Investigations survive process restarts.** LangGraph's checkpointing persists the full agent state to a database, enabling:
+- Pause and resume investigations across restarts
+- Review historical investigations with complete transcripts
+- Debug and replay specific investigation steps
+- Track multiple concurrent investigations
+
+### How It Works
+
+```python
+from agent.graph import create_incident_response_graph
+from agent.utils.checkpointing import get_checkpointer, get_thread_id
+
+# Create a checkpointer (SQLite by default)
+checkpointer = get_checkpointer()
+
+# Create graph with checkpointing enabled
+graph = create_incident_response_graph(checkpointer=checkpointer)
+
+# Start an investigation with a unique thread_id
+thread_id = get_thread_id("alert_12345")
+config = {"configurable": {"thread_id": thread_id}}
+
+# Run the investigation
+result = graph.invoke(initial_state, config=config)
+
+# === AFTER PROCESS RESTART ===
+
+# Create new graph and checkpointer instances
+checkpointer = get_checkpointer()
+graph = create_incident_response_graph(checkpointer=checkpointer)
+
+# Resume from checkpoint using the same thread_id
+state = graph.get_state(config)
+# Continue investigation from where it left off
+```
+
+### Configuration
+
+Set checkpoint mode via environment variable:
+
+```bash
+# SQLite (default for dev/testing)
+CHECKPOINT_MODE=sqlite
+CHECKPOINT_DB_PATH=./data/checkpoints.db
+
+# Postgres (for production)
+CHECKPOINT_MODE=postgres
+DATABASE_URL=postgresql://user:password@localhost:5432/incident_response
+
+# In-memory (no persistence)
+CHECKPOINT_MODE=memory
+```
+
+### Testing Resumability
+
+```bash
+python tests/test_checkpointing.py
+```
+
+This demonstrates:
+1. Starting an investigation with checkpointing
+2. Simulating a process restart
+3. Resuming from the exact checkpoint
+4. Verifying state continuity
+
 ## Setup
 
 ### Prerequisites
@@ -140,7 +207,7 @@ python -m agent.graph
 
 ## Development Status
 
-**Current Phase:** Step 6 - Human-in-the-Loop Approval ✅
+**Current Phase:** Step 7 - Checkpointing + Resumability ✅
 
 - [x] State types defined
 - [x] Skeleton graph with no-op nodes
@@ -177,7 +244,13 @@ python -m agent.graph
   - [x] Full audit trail (status, reasoning, decided_by, method)
   - [x] Integration with recovery_proposal node
   - [x] Comprehensive test coverage
-- [ ] Checkpointing + resumability
+- [x] **Checkpointing + resumability** 💾 DURABILITY
+  - [x] LangGraph checkpointing with SQLite/Postgres
+  - [x] Thread-based investigation tracking
+  - [x] State persistence across process restarts
+  - [x] Resumability test demonstrating pause/resume
+  - [x] Multiple concurrent investigations supported
+  - [x] Complete audit trail of all investigations
 - [ ] Eval harness with scoring
 - [ ] Real MCP integrations
 - [ ] Dashboard

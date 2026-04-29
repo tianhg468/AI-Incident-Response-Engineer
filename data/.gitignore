@@ -1,0 +1,7 @@
+# Ignore all checkpoint databases
+*.db
+*.db-shm
+*.db-wal
+
+# But keep this directory
+!.gitignore

@@ -1,11 +1,12 @@
 """LangGraph workflow for incident response agent."""
 
-from typing import Literal
+from typing import Literal, Optional
 from datetime import datetime
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 from agent.state import AgentState
+from agent.utils.checkpointing import get_checkpointer, get_thread_id
 from agent.nodes import (
     intake_node,
     evidence_gathering_node,
@@ -91,16 +92,21 @@ def escalate_node(state: AgentState) -> AgentState:
 # Graph Construction
 # ============================================================================
 
-def create_incident_response_graph(checkpointer=None):
+def create_incident_response_graph(checkpointer=None, enable_checkpointing: bool = True):
     """Create the incident response LangGraph workflow.
 
     Args:
         checkpointer: Optional checkpointer for state persistence.
-                     If None, uses in-memory (no persistence).
+                     If None and enable_checkpointing is True, creates a default SQLite checkpointer.
+                     If None and enable_checkpointing is False, uses in-memory (no persistence).
+        enable_checkpointing: Whether to enable checkpointing. Defaults to True.
 
     Returns:
-        Compiled StateGraph
+        Compiled StateGraph with optional checkpointing
     """
+    # Get checkpointer if not provided
+    if checkpointer is None and enable_checkpointing:
+        checkpointer = get_checkpointer()
     # Create the graph
     workflow = StateGraph(AgentState)
 
