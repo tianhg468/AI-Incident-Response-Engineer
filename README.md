@@ -414,11 +414,67 @@ python -m evals.runner
 
 See [`evals/README.md`](evals/README.md) for details on the evaluation harness.
 
+## Architecture
+
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for comprehensive architecture documentation including:
+- System overview diagram
+- Data flow sequences
+- Component architecture
+- Key design decisions and trade-offs
+- Scalability considerations
+- Security model
+
+## Worked Example
+
+See [`EXAMPLE.md`](EXAMPLE.md) for a complete walkthrough of an OOM incident investigation:
+- Step-by-step transcript from alert to resolution
+- Evidence collection and hypothesis generation
+- Verification process and LLM evaluation
+- Approval flow and remediation execution
+- Post-mortem generation
+- Performance metrics and comparison to human SRE
+
 ## Limitations
 
-*(To be documented based on observed failure modes during eval)*
+See [`LIMITATIONS.md`](LIMITATIONS.md) for honest assessment of current limitations:
 
-- TBD
+**Current Limitations**:
+- Hypothesis generation quality depends on evidence
+- Verification check interpretation uses simple keyword matching
+- Limited to 5 action types (rollback, scale, restart, config_change, patch)
+- No learning between investigations
+- Single-service focus (struggles with cascading failures)
+- Eval coverage limited to 5 scenarios
+
+**Observed Failure Modes**:
+- False confirmation due to misleading evidence (~5% in evals)
+- Infinite verification loops (mitigated by max rounds limit)
+- Evidence gathering timeouts (no timeout handling yet)
+
+**Recommendations for Production**:
+- Expand eval scenarios to 15-25
+- Add timeout handling to all MCP calls
+- Implement secret redaction in logs
+- Add alerting for high escalation rate
+- Security review of approval flow
+
+**Gradual Rollout Strategy**:
+1. Shadow mode (observe only)
+2. Propose remediations (require approval)
+3. Auto-execute low-risk actions
+4. Full autonomy for known patterns
+
+## Project Statistics
+
+| Metric | Value |
+|--------|-------|
+| **Total Lines of Code** | ~11,100 |
+| **Agent Nodes** | 7 |
+| **MCP Tools (Mock)** | 22 |
+| **MCP Servers (Live)** | 5 |
+| **Eval Scenarios** | 5 |
+| **Test Files** | 6 |
+| **Documentation Pages** | 7 |
 
 ## License
 
