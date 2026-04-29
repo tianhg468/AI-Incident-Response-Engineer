@@ -6,7 +6,7 @@ This document tracks the implementation progress of the AI Incident Response Eng
 
 ---
 
-## ✅ Completed: Steps 1-9
+## ✅ Completed: Steps 1-10
 
 ### Step 1: State Types & Skeleton Graph ✅
 
@@ -421,6 +421,83 @@ python -m agent.graph
 
 ---
 
+### Step 10: Streamlit Dashboard ✅
+
+**Completed:** Interactive dashboard for monitoring investigations and metrics
+
+**Files Created:**
+- `dashboard/app.py` - Main Streamlit application (~350 lines)
+- `dashboard/checkpoint_reader.py` - Database reader for investigations (~200 lines)
+- `dashboard/__init__.py` - Package initialization
+- `dashboard/README.md` - Complete dashboard documentation
+
+**Implementation:**
+- **Overview Page:**
+  - Summary metrics (total, completed, escalated, avg rounds)
+  - Distribution charts (by severity, by service)
+  - Real-time statistics from checkpoint database
+- **Investigations List:**
+  - Filterable table (status, severity, service)
+  - Investigation cards with key metrics
+  - Quick access to detail views
+- **Investigation Detail:**
+  - Full incident information
+  - Hypotheses with verification status
+  - Recovery proposal with approval info
+  - Investigation timeline with checkpoints
+- **Checkpoint Reader:**
+  - Reads LangGraph SQLite checkpoint database
+  - Extracts investigation state and history
+  - Provides aggregate statistics
+  - Timeline reconstruction
+- **Features:**
+  - Auto-refresh option (30s interval)
+  - Responsive layout with tabs and expanders
+  - Color-coded status indicators
+  - Duration formatting
+  - Database connection status
+
+**Key Achievement:**
+- **Real-time visibility** - monitor active and historical investigations
+- **Full transparency** - complete investigation transcripts
+- **Metrics tracking** - measure agent performance over time
+- **User-friendly** - intuitive navigation and filtering
+
+**Statistics:**
+- ~550 lines of dashboard code
+- 3 main views (overview, list, detail)
+- 4 detail tabs (incident, hypotheses, recovery, timeline)
+- Real-time database queries
+
+**Usage:**
+```bash
+# Run some investigations first
+export MODE=eval SCENARIO=oom_after_deploy
+python -m agent.graph
+
+# Launch dashboard
+streamlit run dashboard/app.py
+
+# Open browser at http://localhost:8501
+```
+
+**Dashboard Views:**
+1. **Overview** - High-level metrics and distributions
+2. **Investigations** - Browse and filter all investigations
+3. **Detail** - Deep dive into specific investigation
+
+**Metrics Displayed:**
+- Total investigations
+- Completion rate
+- Escalation rate
+- Average verification rounds
+- Distribution by severity
+- Distribution by service
+- Investigation duration
+- Approval status
+
+---
+
 ## Implementation Metrics
 
 ### Lines of Code
@@ -429,9 +506,10 @@ python -m agent.graph
 - **Real MCP Integration:** ~450 lines (client, config)
 - **Custom MCP Server:** ~1200 lines
 - **Eval Harness:** ~600 lines (rubric, runner)
+- **Dashboard:** ~550 lines (app, checkpoint reader)
 - **Tests:** ~1250 lines
-- **Documentation:** ~2500 lines (README, SPEC, PROGRESS, MCP docs, eval docs, integration guides)
-- **Total:** ~10050 lines
+- **Documentation:** ~3000 lines (README, SPEC, PROGRESS, MCP docs, eval docs, integration guides, dashboard docs)
+- **Total:** ~11100 lines
 
 ### Test Coverage
 - Skeleton graph execution ✅
@@ -541,7 +619,7 @@ python tests/test_mock_mcp_servers.py
 - [x] Checkpointing + resumability (step 7) ✅
 - [x] Eval harness with scoring (step 8) ✅
 - [x] Real MCP server integration (step 9) ✅
-- [ ] Dashboard (step 10)
+- [x] Dashboard (step 10) ✅
 - [ ] Webhook endpoint (FastAPI)
 - [ ] Full runbook integration in workflow
 - [ ] Deploy correlation in diagnosis
@@ -610,15 +688,16 @@ If continuing development, recommended order:
 
 | Metric | Value |
 |--------|-------|
-| Total Lines of Code | ~10,050 |
+| Total Lines of Code | ~11,100 |
 | Agent Nodes | 7 |
 | MCP Tools (Mock) | 22 |
 | MCP Servers Supported (Live) | 5 (K8s, GitHub, Slack, Obs, Runbook) |
 | Test Files | 6 |
 | Eval Scenarios | 5 (complete with ground truth) |
-| Documentation Pages | 6 (README, SPEC, PROGRESS, MCP mock, MCP real, Eval) |
-| Time to Complete Steps 1-9 | ~1 session |
+| Dashboard Pages | 3 (Overview, Investigations, Detail) |
+| Documentation Pages | 7 (README, SPEC, PROGRESS, MCP mock, MCP real, Eval, Dashboard) |
+| Time to Complete Steps 1-10 | ~1 session |
 
 ---
 
-*Last Updated: Steps 1-9 Complete (Real MCP Server Integration)*
+*Last Updated: Steps 1-10 Complete (Dashboard)*

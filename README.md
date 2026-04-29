@@ -224,6 +224,56 @@ This demonstrates:
 3. Resuming from the exact checkpoint
 4. Verifying state continuity
 
+## Dashboard
+
+**Monitor investigations in real-time** with the Streamlit dashboard. View active and historical investigations, track metrics, and analyze agent performance.
+
+### Quick Start
+
+```bash
+# Run some investigations first
+export MODE=eval SCENARIO=oom_after_deploy
+python -m agent.graph
+
+# Launch dashboard
+streamlit run dashboard/app.py
+
+# Open browser at http://localhost:8501
+```
+
+### Features
+
+**Overview Page:**
+- Summary metrics (total, completed, escalated, avg rounds)
+- Distribution charts (by severity, by service)
+- Real-time auto-refresh option
+
+**Investigations List:**
+- Filter by status, severity, service
+- Quick view of key metrics
+- One-click access to details
+
+**Investigation Detail:**
+- Full incident information
+- All hypotheses with verification status
+- Recovery proposal and approval info
+- Complete investigation timeline
+
+### Example Dashboard Views
+
+**Metrics Tracked:**
+- Total investigations: 15
+- Completion rate: 80%
+- Escalation rate: 20%
+- Avg verification rounds: 1.8
+
+**Filters:**
+- Status: completed, escalated, in_progress
+- Severity: critical, high, medium, low
+- Service: payment-service, user-service, etc.
+
+See [`dashboard/README.md`](dashboard/README.md) for detailed documentation.
+
 ## Setup
 
 ### Prerequisites
@@ -250,22 +300,27 @@ cp .env.example .env
 ### Running Locally
 
 ```bash
-# Start infrastructure (Postgres for checkpointing)
-docker-compose up -d
+# 1. Set environment variables
+export MODE=eval
+export SCENARIO=oom_after_deploy
+export CHECKPOINT_MODE=sqlite
 
-# Run the webhook server
-uvicorn webhook.main:app --reload
+# 2. Run an investigation
+python -m agent.graph
 
-# In another terminal, run the dashboard
+# 3. Launch the dashboard
 streamlit run dashboard/app.py
 
-# Test with a sample incident
-python -m agent.graph
+# 4. (Optional) Start infrastructure for production
+docker-compose up -d
+
+# 5. (Future) Run the webhook server
+# uvicorn webhook.main:app --reload
 ```
 
 ## Development Status
 
-**Current Phase:** Step 9 - Real MCP Server Integration ✅
+**Current Phase:** Step 10 - Dashboard ✅
 
 - [x] State types defined
 - [x] Skeleton graph with no-op nodes
@@ -323,7 +378,13 @@ python -m agent.graph
   - [x] Environment-based configuration
   - [x] Transparent mode switching (eval/live)
   - [x] Comprehensive integration documentation
-- [ ] Dashboard
+- [x] **Streamlit dashboard** 📊 OBSERVABILITY
+  - [x] Overview page with summary metrics
+  - [x] Investigation list with filtering
+  - [x] Detailed investigation view with full transcript
+  - [x] Hypothesis and verification tracking
+  - [x] Recovery proposal and approval status
+  - [x] Real-time checkpoint database reading
 
 ## Current Eval Scores
 
