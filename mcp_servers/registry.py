@@ -81,46 +81,66 @@ class MCPServerRegistry:
     def _init_live_servers(self):
         """Initialize real MCP servers.
 
-        In live mode, we connect to actual MCP servers via stdio transport.
-        Each server runs as a separate process and communicates via JSON-RPC.
+        In live mode, we use our live wrapper classes that make real API calls
+        to Kubernetes (kubectl), GitHub (REST API), Slack (Bot API), and Grafana.
         """
-        logger.info("Initializing real MCP servers for live mode...")
+        logger.info("Initializing live MCP servers for production mode...")
 
-        # Get server configurations from environment
-        try:
-            configs = get_all_server_configs()
-        except RuntimeError as e:
-            logger.error(f"Failed to get server configs: {e}")
-            raise
+        # Import live server classes
+        from mcp_servers.live import (
+            LiveKubernetesMCPServer,
+            LiveGitHubMCPServer,
+            LiveSlackMCPServer,
+            LiveObservabilityMCPServer
+        )
 
-        # Create real MCP server clients
+        # Create live server instances
         self._servers = {}
 
-        for service_name, config in configs.items():
-            try:
-                logger.info(f"Configuring {service_name}: {config.description}")
+        try:
+            # Initialize Kubernetes (required for incident response)
+            logger.info("Initializing Kubernetes live server...")
+            self._servers["kubernetes"] = LiveKubernetesMCPServer()
+            logger.info("✅ Kubernetes live server initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize Kubernetes server: {e}")
+            raise RuntimeError(f"Kubernetes server is required for live mode: {e}")
 
-                client = RealMCPServerClient(
-                    service_name=config.service_name,
-                    command=config.command,
-                    args=config.args,
-                    env=config.env,
-                    cwd=config.cwd
-                )
+        # Initialize GitHub (optional - provides commit history analysis)
+        try:
+            logger.info("Initializing GitHub live server...")
+            self._servers["github"] = LiveGitHubMCPServer()
+            logger.info("✅ GitHub live server initialized")
+        except Exception as e:
+            logger.warning(f"GitHub server not available: {e}")
+            logger.warning("Continuing without GitHub integration")
 
-                self._servers[service_name] = client
+        # Initialize Slack (optional - provides approval workflow and notifications)
+        try:
+            logger.info("Initializing Slack live server...")
+            self._servers["slack"] = LiveSlackMCPServer()
+            logger.info("✅ Slack live server initialized")
+        except Exception as e:
+            logger.warning(f"Slack server not available: {e}")
+            logger.warning("Continuing without Slack integration")
 
-            except Exception as e:
-                logger.error(f"Failed to configure {service_name} server: {e}")
-                # Continue with other servers even if one fails
+        # Initialize Grafana/Observability (optional - provides metrics and alerts)
+        try:
+            logger.info("Initializing Grafana live server...")
+            self._servers["observability"] = LiveObservabilityMCPServer()
+            logger.info("✅ Grafana live server initialized")
+        except Exception as e:
+            logger.warning(f"Grafana server not available: {e}")
+            logger.warning("Continuing without Grafana integration")
 
         if not self._servers:
             raise RuntimeError(
                 "No MCP servers could be initialized in live mode. "
-                "Check your environment configuration."
+                "Check your environment configuration and API credentials."
             )
 
-        logger.info(f"✅ Initialized {len(self._servers)} real MCP servers")
+        print(f"🚀 Initialized {len(self._servers)} live MCP servers (PRODUCTION MODE)")
+        print(f"   Available services: {', '.join(self._servers.keys())}")
 
     def get_server(self, service: str):
         """Get an MCP server instance by service name.

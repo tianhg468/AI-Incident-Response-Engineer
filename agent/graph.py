@@ -2,8 +2,12 @@
 
 from typing import Literal, Optional
 from datetime import datetime
+from dotenv import load_dotenv
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.sqlite import SqliteSaver
+
+# Load environment variables from .env file
+load_dotenv()
 
 from agent.state import AgentState
 from agent.utils.checkpointing import get_checkpointer, get_thread_id
@@ -166,7 +170,9 @@ def create_incident_response_graph(checkpointer=None, enable_checkpointing: bool
 # ============================================================================
 
 if __name__ == "__main__":
-    # Create graph without persistence for testing
+    from agent.utils.checkpointing import get_thread_id
+
+    # Create graph with checkpointing enabled
     graph = create_incident_response_graph()
 
     # Initialize state
@@ -188,11 +194,23 @@ if __name__ == "__main__":
         "completed_at": None
     }
 
-    print("🚀 Starting incident response workflow (skeleton mode)...\n")
+    # Generate a thread ID for this investigation
+    thread_id = get_thread_id()
 
-    # Run the graph
-    result = graph.invoke(initial_state)
+    # Create config with thread_id for checkpointing
+    config = {
+        "configurable": {
+            "thread_id": thread_id
+        }
+    }
+
+    print("🚀 Starting incident response workflow...")
+    print(f"📝 Investigation ID: {thread_id}\n")
+
+    # Run the graph with config
+    result = graph.invoke(initial_state, config=config)
 
     print(f"\n✅ Workflow completed with status: {result.get('status')}")
     print(f"📊 Total messages: {len(result.get('messages', []))}")
     print(f"⏱️  Verification rounds: {result.get('verification_round', 0)}")
+    print(f"💾 State saved to checkpoint database")

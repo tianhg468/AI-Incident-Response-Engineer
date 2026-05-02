@@ -16,7 +16,7 @@ class LLMClient:
     Provides simplified interface for agent nodes to interact with Claude.
     """
 
-    def __init__(self, model: str = "claude-3-5-sonnet-20241022"):
+    def __init__(self, model: str = "claude-sonnet-4-5-20250929"):
         """Initialize LLM client.
 
         Args:

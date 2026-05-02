@@ -1,10 +1,9 @@
 """Checkpoint reader for extracting investigation data from the database."""
 
 import sqlite3
-import json
 from pathlib import Path
 from typing import Optional
-from datetime import datetime
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 
 class CheckpointReader:
@@ -26,7 +25,7 @@ class CheckpointReader:
         self.db_path = db_path
 
     def list_investigations(self) -> list[dict]:
-        """List all investigations in the checkpoint database.
+        """List all investigations in the database.
 
         Returns:
             List of investigation summaries
@@ -34,55 +33,47 @@ class CheckpointReader:
         if not self.db_path.exists():
             return []
 
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
+        # Use LangGraph's SqliteSaver to properly deserialize checkpoints
+        conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        saver = SqliteSaver(conn)
 
         try:
-            # Query checkpoints table
-            # LangGraph stores checkpoints with thread_id, checkpoint_id, checkpoint_data
-            cursor.execute("""
-                SELECT DISTINCT thread_id
-                FROM checkpoints
-                ORDER BY thread_ts DESC
-            """)
-
+            # Get all unique thread IDs
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT thread_id FROM checkpoints ORDER BY checkpoint_id DESC")
             thread_ids = [row[0] for row in cursor.fetchall()]
 
             investigations = []
 
             for thread_id in thread_ids:
-                # Get latest checkpoint for this thread
-                cursor.execute("""
-                    SELECT checkpoint, thread_ts
-                    FROM checkpoints
-                    WHERE thread_id = ?
-                    ORDER BY thread_ts DESC
-                    LIMIT 1
-                """, (thread_id,))
+                try:
+                    # Use SqliteSaver to get the latest checkpoint
+                    # This properly deserializes the data
+                    config = {"configurable": {"thread_id": thread_id}}
+                    checkpoint_tuple = saver.get_tuple(config)
 
-                row = cursor.fetchone()
-                if row:
-                    checkpoint_data = json.loads(row[0]) if isinstance(row[0], str) else row[0]
+                    if checkpoint_tuple and checkpoint_tuple.checkpoint:
+                        # Extract channel values (the actual state)
+                        channel_values = checkpoint_tuple.checkpoint.get("channel_values", {})
 
-                    # Extract state from checkpoint
-                    # LangGraph checkpoint structure: {"v": 1, "ts": "...", "channel_values": {...}}
-                    state = checkpoint_data.get("channel_values", {})
+                        # Create summary
+                        incident = channel_values.get("incident", {})
 
-                    # Create summary
-                    incident = state.get("incident", {})
-
-                    investigations.append({
-                        "thread_id": thread_id,
-                        "service": incident.get("service", "Unknown") if incident else "Unknown",
-                        "severity": incident.get("severity", "unknown") if incident else "unknown",
-                        "status": state.get("status", "unknown"),
-                        "started_at": state.get("started_at"),
-                        "completed_at": state.get("completed_at"),
-                        "verification_rounds": state.get("verification_round", 0),
-                        "escalated": state.get("status") == "escalated",
-                        "timestamp": row[1]
-                    })
+                        investigations.append({
+                            "thread_id": thread_id,
+                            "service": incident.get("service", "Unknown") if incident else "Unknown",
+                            "severity": incident.get("severity", "unknown") if incident else "unknown",
+                            "status": channel_values.get("status", "unknown"),
+                            "started_at": channel_values.get("started_at"),
+                            "completed_at": channel_values.get("completed_at"),
+                            "verification_rounds": channel_values.get("verification_round", 0),
+                            "escalated": channel_values.get("status") == "escalated",
+                            "checkpoint_id": checkpoint_tuple.checkpoint.get("id", "unknown")
+                        })
+                except Exception as e:
+                    # Skip checkpoints that can't be loaded
+                    print(f"Warning: Could not load checkpoint for {thread_id}: {e}")
+                    continue
 
             return investigations
 
@@ -101,28 +92,19 @@ class CheckpointReader:
         if not self.db_path.exists():
             return None
 
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
+        conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        saver = SqliteSaver(conn)
 
         try:
-            # Get latest checkpoint for thread
-            cursor.execute("""
-                SELECT checkpoint
-                FROM checkpoints
-                WHERE thread_id = ?
-                ORDER BY thread_ts DESC
-                LIMIT 1
-            """, (thread_id,))
+            # Get latest checkpoint using SqliteSaver
+            config = {"configurable": {"thread_id": thread_id}}
+            checkpoint_tuple = saver.get_tuple(config)
 
-            row = cursor.fetchone()
-            if not row:
-                return None
+            if checkpoint_tuple and checkpoint_tuple.checkpoint:
+                # Return the channel values (state)
+                return checkpoint_tuple.checkpoint.get("channel_values", {})
 
-            checkpoint_data = json.loads(row[0]) if isinstance(row[0], str) else row[0]
-            state = checkpoint_data.get("channel_values", {})
-
-            return state
+            return None
 
         finally:
             conn.close()
@@ -139,31 +121,43 @@ class CheckpointReader:
         if not self.db_path.exists():
             return []
 
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
+        conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        saver = SqliteSaver(conn)
 
         try:
+            cursor = conn.cursor()
             cursor.execute("""
-                SELECT checkpoint, thread_ts, checkpoint_ns
+                SELECT checkpoint_id
                 FROM checkpoints
                 WHERE thread_id = ?
-                ORDER BY thread_ts ASC, checkpoint_ns ASC
+                ORDER BY checkpoint_id ASC
             """, (thread_id,))
 
             timeline = []
 
             for row in cursor.fetchall():
-                checkpoint_data = json.loads(row[0]) if isinstance(row[0], str) else row[0]
-                state = checkpoint_data.get("channel_values", {})
+                checkpoint_id = row[0]
+                try:
+                    # Get specific checkpoint
+                    config = {
+                        "configurable": {
+                            "thread_id": thread_id,
+                            "checkpoint_id": checkpoint_id
+                        }
+                    }
+                    checkpoint_tuple = saver.get_tuple(config)
 
-                timeline.append({
-                    "timestamp": row[1],
-                    "checkpoint_ns": row[2],
-                    "status": state.get("status"),
-                    "verification_round": state.get("verification_round", 0),
-                    "state_snapshot": state
-                })
+                    if checkpoint_tuple and checkpoint_tuple.checkpoint:
+                        channel_values = checkpoint_tuple.checkpoint.get("channel_values", {})
+
+                        timeline.append({
+                            "checkpoint_id": checkpoint_id,
+                            "status": channel_values.get("status"),
+                            "verification_round": channel_values.get("verification_round", 0),
+                            "state_snapshot": channel_values
+                        })
+                except Exception:
+                    continue
 
             return timeline
 

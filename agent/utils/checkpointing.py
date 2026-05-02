@@ -45,12 +45,13 @@ def get_checkpointer(
 
         logger.info(f"Using SQLite checkpointer: {db_path}")
 
-        # SqliteSaver expects a connection string
-        conn_string = f"sqlite:///{db_path}"
+        # Create SQLite connection and checkpointer
+        # Newer API uses sqlite3.Connection directly
+        import sqlite3
+        conn = sqlite3.connect(str(db_path), check_same_thread=False)
 
-        # Create and return the checkpointer
-        # The SqliteSaver will handle creating tables on first use
-        checkpointer = SqliteSaver.from_conn_string(conn_string)
+        # Create the checkpointer with the connection
+        checkpointer = SqliteSaver(conn)
 
         return checkpointer
 
