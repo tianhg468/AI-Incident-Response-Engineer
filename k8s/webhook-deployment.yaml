@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-webhook
+  namespace: default
+  labels:
+    app: agent-webhook
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-webhook
+  template:
+    metadata:
+      labels:
+        app: agent-webhook
+    spec:
+      containers:
+      - name: webhook
+        image: ghcr.io/tianhg468/agentic_ai/webhook:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: webhook-secrets
+              key: webhook-secret
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: webhook-secrets
+              key: anthropic-api-key
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: webhook-secrets
+              key: github-token
+        - name: GITHUB_ORG
+          value: "tianhg468"
+        - name: GITHUB_REPO
+          value: "agentic_ai"
+        - name: EXECUTION_MODE
+          value: "gitops"
+        - name: MODE
+          value: "live"
+        - name: CHECKPOINT_MODE
+          value: "sqlite"
+        - name: CHECKPOINT_DB_PATH
+          value: "/data/checkpoints.db"
+        - name: KUBECONFIG
+          value: "/kubeconfig/config"
+        - name: K8S_NAMESPACE
+          value: "default"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: kubeconfig
+          mountPath: /kubeconfig
+          readOnly: true
+      imagePullSecrets:
+      - name: ghcr-secret
+      volumes:
+      - name: data
+        emptyDir: {}
+      - name: kubeconfig
+        secret:
+          secretName: webhook-kubeconfig
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-webhook
+  namespace: default
+  labels:
+    app: agent-webhook
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    app: agent-webhook
