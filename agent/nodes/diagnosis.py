@@ -45,7 +45,11 @@ def diagnosis_node(state: AgentState) -> AgentState:
         }
 
     # Otherwise, generate new hypotheses using LLM
-    print("   Analyzing evidence to generate hypotheses...")
+    human_feedback = state.get("human_feedback")
+    if human_feedback:
+        print(f"   Analyzing evidence with human feedback: {human_feedback}")
+    else:
+        print("   Analyzing evidence to generate hypotheses...")
 
     incident = state.get("incident")
     evidence = state.get("evidence")
@@ -55,8 +59,8 @@ def diagnosis_node(state: AgentState) -> AgentState:
         # Return placeholder
         return _return_placeholder_hypotheses(state)
 
-    # Build prompt
-    prompt = _build_diagnosis_prompt(incident, evidence)
+    # Build prompt (include human feedback if available)
+    prompt = _build_diagnosis_prompt(incident, evidence, human_feedback)
 
     # Call LLM
     llm = LLMClient()
@@ -89,6 +93,7 @@ def diagnosis_node(state: AgentState) -> AgentState:
             "hypotheses": state.get("hypotheses", []) + new_hypotheses,
             "current_hypothesis_index": 0,  # Reset to first hypothesis
             "status": "verifying",
+            "human_feedback": None,  # Clear feedback after using it
             "messages": state.get("messages", []) + [
                 {"role": "system", "content": f"Generated {len(new_hypotheses)} hypotheses using LLM"}
             ]
@@ -99,12 +104,13 @@ def diagnosis_node(state: AgentState) -> AgentState:
         return _return_placeholder_hypotheses(state)
 
 
-def _build_diagnosis_prompt(incident: dict, evidence: dict) -> str:
+def _build_diagnosis_prompt(incident: dict, evidence: dict, human_feedback: str = None) -> str:
     """Build diagnosis prompt from incident and evidence.
 
     Args:
         incident: Incident data
         evidence: Evidence data
+        human_feedback: Optional human feedback on why previous approach won't work
 
     Returns:
         Formatted prompt
@@ -144,7 +150,19 @@ def _build_diagnosis_prompt(incident: dict, evidence: dict) -> str:
     log_errors = [log for log in logs if log.get("level") in ["ERROR", "WARN"]]
     log_summary = f"{len(logs)} total, {len(log_errors)} errors/warnings"
 
+    # Add human feedback section if available
+    feedback_section = ""
+    if human_feedback:
+        feedback_section = f"""
+**IMPORTANT - Human Feedback:**
+A previous remediation approach was rejected with this feedback:
+"{human_feedback}"
+
+Take this feedback into account when generating new hypotheses. Avoid the rejected approach and consider alternative solutions suggested by the human operator.
+"""
+
     prompt = f"""Analyze this production incident and generate 2-3 ranked hypotheses about the root cause.
+{feedback_section}
 
 **Incident Details:**
 - Service: {incident.get('service')}

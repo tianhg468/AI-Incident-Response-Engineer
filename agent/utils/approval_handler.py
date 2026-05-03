@@ -145,6 +145,7 @@ class ApprovalHandler:
 
         # Try Slack approval first
         try:
+            print("   📲 Attempting Slack approval...")
             logger.info("Attempting Slack approval...")
             slack_result = self._request_slack_approval(title, details, {
                 "action_type": action_type,
@@ -152,17 +153,31 @@ class ApprovalHandler:
                 "blast_radius": blast_radius
             })
 
-            if slack_result.get("ok"):
-                approval_id = slack_result.get("approval_id")
-                logger.info(f"Slack approval request posted: {approval_id}")
+            print(f"   [DEBUG] Slack approval result: {slack_result}")
 
-                # Poll for approval
-                return self._wait_for_slack_approval(approval_id, timeout=300)
+            # Check for success (either "ok" or "success" field)
+            if slack_result.get("ok") or slack_result.get("success"):
+                approval_id = slack_result.get("approval_id")
+                if approval_id:
+                    logger.info(f"Slack approval request posted: {approval_id}")
+                    print(f"   ✓ Slack approval request posted: {approval_id}")
+                    print(f"   ⏳ Waiting for response in Slack #incidents channel...")
+
+                    # Poll for approval
+                    return self._wait_for_slack_approval(approval_id, timeout=300)
+                else:
+                    print(f"   ✗ No approval_id in response: {slack_result}")
+            else:
+                print(f"   ✗ Slack approval failed: {slack_result.get('error', 'Unknown error')}")
 
         except Exception as e:
             logger.warning(f"Slack approval failed: {e}")
+            print(f"   ✗ Slack approval error: {e}")
+            import traceback
+            traceback.print_exc()
 
         # Fallback to CLI
+        print("   ⤵️  Falling back to CLI approval...")
         logger.info("Falling back to CLI approval...")
         return self._request_cli_approval(
             action_type=action_type,
@@ -211,34 +226,53 @@ class ApprovalHandler:
         Returns:
             Approval result
         """
+        import time
+        from webhook.approval_manager import get_approval_manager
+
         elapsed = 0
         logger.info(f"Waiting for approval (timeout: {timeout}s)...")
+        approval_manager = get_approval_manager()
 
         while elapsed < timeout:
-            # Check approval status
-            status = self.mcp.get_approval_status(approval_id)
+            # Check approval status from the approval manager
+            status_dict = approval_manager.get_status(approval_id)
 
-            if not status.get("ok"):
-                logger.error(f"Error checking approval status: {status}")
+            if status_dict.get("status") == "not_found":
+                logger.error(f"Approval not found: {approval_id}")
                 break
 
-            approval_status = status.get("status")
+            approval_status = status_dict.get("status")
 
             if approval_status == "approved":
                 logger.info("✓ Approval granted!")
+                print(f"   ✓ Approved by {status_dict.get('approved_by')} via Slack!")
                 return {
                     "status": "approved",
-                    "reasoning": status.get("reasoning", "Approved via Slack"),
-                    "decided_by": status.get("decided_by"),
+                    "reasoning": f"Approved via Slack by {status_dict.get('approved_by')}",
+                    "decided_by": status_dict.get("approved_by"),
                     "method": "slack"
                 }
 
             elif approval_status == "rejected":
                 logger.info("✗ Approval rejected")
+                print(f"   ✗ Rejected by {status_dict.get('approved_by')} via Slack")
                 return {
                     "status": "rejected",
-                    "reasoning": status.get("reasoning", "Rejected via Slack"),
-                    "decided_by": status.get("decided_by"),
+                    "reasoning": f"Rejected via Slack by {status_dict.get('approved_by')}",
+                    "decided_by": status_dict.get("approved_by"),
+                    "method": "slack"
+                }
+
+            elif approval_status == "rejected_with_feedback":
+                logger.info("🔄 Approval rejected with feedback")
+                print(f"   🔄 Rejected with feedback by {status_dict.get('approved_by')} via Slack")
+                feedback = status_dict.get("feedback", "")
+                print(f"   📝 Feedback: {feedback}")
+                return {
+                    "status": "rejected_with_feedback",
+                    "reasoning": f"Rejected with feedback: {feedback}",
+                    "feedback": feedback,
+                    "decided_by": status_dict.get("approved_by"),
                     "method": "slack"
                 }
 
@@ -288,13 +322,22 @@ class ApprovalHandler:
         print("\n" + "=" * 80)
 
         # Prompt for approval
-        response = input("\nApprove this action? [yes/no]: ").strip().lower()
+        response = input("\nApprove this action? [yes/no/feedback]: ").strip().lower()
 
         if response in ["yes", "y"]:
             reasoning = input("Reasoning (optional): ").strip()
             return {
                 "status": "approved",
                 "reasoning": reasoning or "Approved via CLI",
+                "decided_by": "cli_user",
+                "method": "cli"
+            }
+        elif response in ["feedback", "f"]:
+            feedback = input("Provide feedback on why this won't work and what to try instead: ").strip()
+            return {
+                "status": "rejected_with_feedback",
+                "reasoning": "Rejected with feedback - requesting alternative approach",
+                "feedback": feedback or "Try a different approach",
                 "decided_by": "cli_user",
                 "method": "cli"
             }

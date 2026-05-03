@@ -134,10 +134,23 @@ class LiveSlackMCPServer:
         # Request approval using live client
         result = self.client.request_approval(action_type, description)
 
+        # If successful, register the approval with the approval manager
+        approval_id = result.get("ts")  # Use Slack message timestamp as ID
+
+        if result.get("success") and approval_id:
+            from webhook.approval_manager import get_approval_manager
+            manager = get_approval_manager()
+            manager.create_approval(
+                approval_id=approval_id,
+                action_type=action_type,
+                description=description
+            )
+
         return {
             "success": result.get("success", False),
             "channel": self.client.channel,
-            "ts": result.get("ts"),
+            "ts": approval_id,
+            "approval_id": approval_id,
             "error": result.get("error"),
             "message": f"Approval request posted for: {action_type}"
         }

@@ -60,14 +60,25 @@ def evidence_gathering_node(state: AgentState) -> AgentState:
     events_result = mcp.get_events(namespace=namespace)
     events = events_result.get("events", [])
 
-    # 3. Pod logs (from affected pods)
+    # 3. Pod logs (from affected pods or all pods if not specified)
     print("  ├─ Getting pod logs...")
     logs = []
     affected_pods = incident.get("affected_pods", [])
+
+    # If no specific affected pods listed, get logs from all pods in the deployment
+    if not affected_pods and pod_status:
+        affected_pods = [pod.get("metadata", {}).get("name") for pod in pod_status[:3]]
+        print(f"     No affected_pods specified, using: {affected_pods}")
+
     for pod_name in affected_pods[:3]:  # Limit to first 3 pods
-        logs_result = mcp.get_pod_logs(pod_name=pod_name, namespace=namespace, tail=50)
-        if "logs" in logs_result:
-            logs.extend(logs_result["logs"])
+        if not pod_name:
+            continue
+        try:
+            logs_result = mcp.get_pod_logs(pod_name=pod_name, namespace=namespace, tail=50)
+            if "logs" in logs_result:
+                logs.extend(logs_result["logs"])
+        except Exception as e:
+            logger.warning(f"Failed to get logs for pod {pod_name}: {e}")
 
     # 4. Deployment history
     print("  ├─ Getting deployment history...")
@@ -128,6 +139,32 @@ def evidence_gathering_node(state: AgentState) -> AgentState:
     print(f"     • {len(events)} events")
     print(f"     • {len(recent_deploys)} recent deployments")
     print(f"     • {len(commits)} commits, {len(prs)} PRs")
+
+    # DEBUG: Show pod details
+    if pod_status:
+        print(f"  [DEBUG] Pod statuses:")
+        for pod in pod_status[:3]:
+            name = pod.get("metadata", {}).get("name", "unknown")
+            phase = pod.get("status", {}).get("phase", "Unknown")
+            container_statuses = pod.get("status", {}).get("containerStatuses", [])
+            print(f"    - {name}: {phase}")
+            if container_statuses:
+                for cs in container_statuses:
+                    state = cs.get("state", {})
+                    last_state = cs.get("lastState", {})
+                    restart_count = cs.get("restartCount", 0)
+                    print(f"      Container: {cs.get('name')}, Restarts: {restart_count}")
+                    if "waiting" in state:
+                        print(f"      State: Waiting - {state['waiting'].get('reason')}")
+                    if "terminated" in last_state:
+                        print(f"      Last: Terminated - {last_state['terminated'].get('reason')}")
+
+    # DEBUG: Show OOM events
+    oom_events = [e for e in events if "oom" in e.get("reason", "").lower() or "oom" in e.get("message", "").lower()]
+    if oom_events:
+        print(f"  [DEBUG] Found {len(oom_events)} OOM-related events:")
+        for evt in oom_events[:3]:
+            print(f"    - {evt.get('reason')}: {evt.get('message')[:80]}")
 
     return {
         **state,

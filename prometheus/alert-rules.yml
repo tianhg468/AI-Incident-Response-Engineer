@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-alert-rules
+  namespace: default
+data:
+  alert-rules.yml: |
+    groups:
+      - name: incident_response
+        interval: 30s
+        rules:
+          # OOMKilled pods alert
+          - alert: PodOOMKilled
+            expr: |
+              kube_pod_container_status_terminated_reason{reason="OOMKilled"} > 0
+            for: 1m
+            labels:
+              severity: critical
+              team: sre
+              alert_type: oomkilled
+            annotations:
+              summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} was OOMKilled"
+              description: "Container {{ $labels.container }} in pod {{ $labels.namespace }}/{{ $labels.pod }} was killed due to OOM"
+              runbook_url: "https://github.com/your-org/runbooks/oom-incidents"
+
+          # CrashLoopBackOff alert
+          - alert: PodCrashLooping
+            expr: |
+              rate(kube_pod_container_status_restarts_total[15m]) > 0
+            for: 5m
+            labels:
+              severity: warning
+              team: sre
+              alert_type: crashloop
+            annotations:
+              summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is crash looping"
+              description: "Container {{ $labels.container }} has restarted {{ $value }} times in the last 15 minutes"
+
+          # High error rate alert
+          - alert: HighErrorRate
+            expr: |
+              (
+                sum(rate(http_requests_total{status=~"5.."}[5m])) by (service)
+                /
+                sum(rate(http_requests_total[5m])) by (service)
+              ) > 0.05
+            for: 5m
+            labels:
+              severity: warning
+              team: sre
+              alert_type: high_error_rate
+            annotations:
+              summary: "High error rate in {{ $labels.service }}"
+              description: "Service {{ $labels.service }} has {{ $value | humanizePercentage }} error rate"
+
+          # Memory usage approaching limit
+          - alert: MemoryUsageHigh
+            expr: |
+              (
+                container_memory_working_set_bytes{container!=""}
+                /
+                container_spec_memory_limit_bytes{container!=""} > 0.9
+              )
+            for: 10m
+            labels:
+              severity: warning
+              team: sre
+              alert_type: memory_pressure
+            annotations:
+              summary: "Container {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} memory usage high"
+              description: "Container is using {{ $value | humanizePercentage }} of its memory limit"

@@ -51,11 +51,34 @@ def recovery_proposal_node(state: AgentState) -> AgentState:
     incident = state.get("incident", {})
     service = incident.get("service", "unknown-service")
 
-    # Determine action based on hypothesis
-    action_type = "rollback"  # Default for deployment-related issues
+    # Analyze deployment history to find the last good revision
+    evidence = state.get("evidence", {})
+    recent_deploys = evidence.get("recent_deploys", [])
+
+    # Determine action based on hypothesis and find target revision
+    action_type = "rollback"
     expected_effect = "Service should recover to normal operation after rollback"
     blast_radius = f"Medium - affects all pods of {service}"
-    commands = [f"kubectl rollout undo deployment/{service} -n default"]
+
+    target_revision = None
+    if recent_deploys and len(recent_deploys) >= 2:
+        # Find the revision with higher memory limits (the "good" one)
+        for deploy in sorted(recent_deploys, key=lambda d: int(d.get("revision", "0"))):
+            resources = deploy.get("resources", [])
+            if resources:
+                memory_limit = resources[0].get("limits", {}).get("memory", "")
+                # If memory limit is >= 128Mi (and not the current low limit), consider it good
+                if any(size in memory_limit for size in ["128Mi", "256Mi", "512Mi", "1Gi", "2Gi"]):
+                    target_revision = deploy.get("revision")
+                    print(f"   Found good revision to rollback to: {target_revision} (memory: {memory_limit})")
+
+    if target_revision:
+        commands = [f"kubectl rollout undo deployment/{service} --to-revision={target_revision} -n default"]
+        expected_effect = f"Rollback to revision {target_revision} with higher memory limits"
+    else:
+        # Fallback to generic undo
+        commands = [f"kubectl rollout undo deployment/{service} -n default"]
+        print("   WARNING: Could not identify specific good revision, using generic rollback")
 
     # Request approval via ApprovalHandler
     approval_handler = ApprovalHandler()
@@ -87,6 +110,10 @@ def recovery_proposal_node(state: AgentState) -> AgentState:
 
     if approval_result["status"] == "approved":
         print(f"   ✓ Approved ({approval_result.get('method', 'unknown')}): {approval_result.get('reasoning')}")
+    elif approval_result["status"] == "rejected_with_feedback":
+        feedback = approval_result.get("feedback", approval_result.get("reasoning", ""))
+        print(f"   🔄 Rejected with feedback ({approval_result.get('method', 'unknown')}): {feedback}")
+        print(f"   ↩️  Looping back to diagnosis with this feedback...")
     elif approval_result["status"] == "rejected":
         print(f"   ✗ Rejected ({approval_result.get('method', 'unknown')}): {approval_result.get('reasoning')}")
     elif approval_result["status"] == "timeout":
@@ -94,10 +121,16 @@ def recovery_proposal_node(state: AgentState) -> AgentState:
     else:
         print(f"   ⏸️  Awaiting approval...")
 
+    # Store human feedback if rejected with feedback
+    human_feedback = None
+    if approval_result["status"] == "rejected_with_feedback":
+        human_feedback = approval_result.get("feedback", approval_result.get("reasoning", "Try a different approach"))
+
     return {
         **state,
         "recovery_proposal": recovery_proposal,
         "status": "awaiting_approval",
+        "human_feedback": human_feedback,
         "messages": state.get("messages", []) + [
             {
                 "role": "system",

@@ -111,6 +111,7 @@ class AgentState(TypedDict):
         "escalated"
     ]
     escalation_reason: Optional[str]
+    human_feedback: Optional[str]  # Feedback from human when recovery proposal is rejected
 
     # Metadata
     messages: Annotated[list[dict], add]  # Conversation history for LLM context

@@ -119,7 +119,7 @@ class MCPClient:
         channel: str = "#incidents"
     ) -> dict:
         """Post an approval request to Slack."""
-        return self.call_tool("slack", "slack_post_approval_request", {
+        return self.call_tool("slack", "slack_request_approval", {
             "channel": channel,
             "title": title,
             "description": description,
@@ -131,3 +131,19 @@ class MCPClient:
         return self.call_tool("slack", "slack_get_approval_status", {
             "approval_id": approval_id
         })
+
+
+# Singleton instance
+_mcp_client: Optional[MCPClient] = None
+
+
+def get_mcp_client() -> MCPClient:
+    """Get or create the singleton MCP client.
+
+    Returns:
+        MCPClient instance
+    """
+    global _mcp_client
+    if _mcp_client is None:
+        _mcp_client = MCPClient()
+    return _mcp_client

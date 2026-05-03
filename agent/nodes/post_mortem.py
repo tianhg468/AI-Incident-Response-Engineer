@@ -124,7 +124,36 @@ An incident affecting {service_name} was detected and investigated.
     print(f"   🎯 Root cause: {root_cause}")
     print("   ✅ Post-mortem complete")
 
-    # TODO: Post to Slack and save as markdown file
+    # Post to Slack
+    try:
+        from agent.utils.mcp_client import get_mcp_client
+        mcp_client = get_mcp_client()
+
+        # Create summary for Slack
+        status_emoji = "✅" if state.get('status') == 'completed' else "🚨"
+        slack_summary = f"""{status_emoji} *Incident Report: {service_name}*
+
+*Status:* {state.get('status', 'unknown').upper()}
+*Duration:* {duration_minutes:.1f} minutes
+*Root Cause:* {root_cause}
+
+*Remediation:*
+{remediation_taken}
+
+Full post-mortem available in dashboard.
+"""
+
+        mcp_client.call_tool(
+            "slack",
+            "slack_post_message",
+            {
+                "text": slack_summary,
+                "channel": "#incidents"
+            }
+        )
+        print("   📨 Posted post-mortem to Slack #incidents")
+    except Exception as e:
+        print(f"   ⚠️  Failed to post to Slack: {e}")
 
     return {
         **state,

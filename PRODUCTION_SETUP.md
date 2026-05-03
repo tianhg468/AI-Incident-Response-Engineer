@@ -144,22 +144,28 @@ Interactive components (buttons) are enabled here, not via OAuth scopes.
 
 1. In left sidebar, click **Interactivity & Shortcuts**
 2. Turn on **Interactivity**
-3. Request URL: For now, use a placeholder like `https://example.com/slack/interactions`
-   - **Note**: For this demo, we won't set up a webhook server to receive button clicks
-   - The bot will still post messages with buttons, but you'll approve actions via the terminal instead
-   - In production, you'd set up a webhook server to handle button clicks
+3. Request URL: **Skip for now** - we'll set this up in Phase 2b (Webhook Server)
+   - Use a placeholder like `https://example.com/slack/interactions` to save
 4. Click **Save Changes**
 
-**For this demo:** You don't need to set up the webhook server. The agent will request approval via:
-- Terminal prompt: "Do you approve? [y/N]"
-- Slack message (informational, buttons won't be functional without webhook)
+**We'll configure the real webhook URL in Phase 2b below.**
 
-### 2.5 Create #incidents Channel
+### 2.5 Get Slack Signing Secret
+
+You'll need this for webhook signature verification:
+
+1. In left sidebar, click **Basic Information**
+2. Scroll to **App Credentials** section
+3. Find **Signing Secret**
+4. Click **Show** and **copy the secret**
+5. **SAVE THIS SECRET** (looks like a random string)
+
+### 2.6 Create #incidents Channel
 
 1. In Slack, create channel: `#incidents`
 2. Invite bot: `/invite @Incident Response Bot`
 
-### 2.6 Test Bot
+### 2.7 Test Bot
 
 ```bash
 # Test message posting
@@ -173,6 +179,78 @@ curl -X POST https://slack.com/api/chat.postMessage \
 
 # Should return: {"ok": true, "message": {...}}
 ```
+
+---
+
+## Phase 2b: Webhook Server Setup (10 min) - OPTIONAL but Recommended
+
+**Skip this if you want to approve via terminal only.**
+
+For production-level Slack approvals with working interactive buttons, set up the webhook server:
+
+### 2b.1 Install ngrok
+
+```bash
+# macOS
+brew install ngrok
+
+# Or download from https://ngrok.com/download
+```
+
+### 2b.2 Start Webhook Server
+
+Open a **new terminal window**:
+
+```bash
+cd /path/to/agentic_ai
+python -m webhook.slack_webhook
+```
+
+Leave this running. You should see:
+
+```
+🚀 Starting webhook server...
+   Port: 3001
+   Waiting for Slack events...
+```
+
+### 2b.3 Expose with ngrok
+
+Open **another new terminal window**:
+
+```bash
+ngrok http 3001
+```
+
+**Copy the HTTPS URL** shown (e.g., `https://abc-123-xyz.ngrok-free.app`)
+
+Leave this running too.
+
+### 2b.4 Update Slack App Request URL
+
+1. Go back to https://api.slack.com/apps
+2. Click your **Incident Response Bot** app
+3. Click **Interactivity & Shortcuts**
+4. In **Request URL** field, enter:
+   ```
+   https://YOUR-NGROK-URL/slack/interactions
+   ```
+   Example: `https://abc-123-xyz.ngrok-free.app/slack/interactions`
+5. Click **Save Changes**
+
+You should see: ✅ **Your Request URL has been verified**
+
+### 2b.5 Update .env
+
+Add your signing secret to `.env`:
+
+```bash
+SLACK_SIGNING_SECRET=your_signing_secret_here
+```
+
+**Done!** Now when you run the agent, buttons in Slack will actually work!
+
+For detailed troubleshooting, see **WEBHOOK_SETUP.md**.
 
 ---
 
@@ -311,6 +389,7 @@ K8S_NAMESPACE=default
 # Slack (from Phase 2)
 SLACK_BOT_TOKEN=xoxb-YOUR-SLACK-TOKEN
 SLACK_CHANNEL=#incidents
+SLACK_SIGNING_SECRET=your-signing-secret  # Optional: for webhook server
 
 # Grafana (from Phase 3)
 GRAFANA_URL=http://localhost:3000

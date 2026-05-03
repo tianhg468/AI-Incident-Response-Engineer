@@ -17,29 +17,56 @@ class LiveKubernetesClient:
     def __init__(self):
         self.namespace = os.getenv("K8S_NAMESPACE", "default")
 
+        # Expand KUBECONFIG path if it contains ~
+        kubeconfig = os.getenv("KUBECONFIG", "")
+        if kubeconfig and "~" in kubeconfig:
+            kubeconfig = os.path.expanduser(kubeconfig)
+            os.environ["KUBECONFIG"] = kubeconfig
+            print(f"[DEBUG LiveK8s] Expanded KUBECONFIG to: {kubeconfig}")
+
     def get_pod_status(self, service: str) -> dict[str, Any]:
         """Get real pod status from Kubernetes."""
         try:
+            cmd = ["kubectl", "get", "pods", "-l", f"app={service}", "-n", self.namespace, "-o", "json"]
+            print(f"[DEBUG LiveK8s] Running: {' '.join(cmd)}")
+
             result = subprocess.run(
-                ["kubectl", "get", "pods", "-l", f"app={service}", "-n", self.namespace, "-o", "json"],
+                cmd,
                 capture_output=True,
                 text=True,
-                check=True
+                check=False  # Don't raise exception, handle it manually
             )
+
+            # Check for errors
+            if result.returncode != 0:
+                print(f"[DEBUG LiveK8s] kubectl FAILED with exit code {result.returncode}")
+                print(f"[DEBUG LiveK8s] STDOUT: {result.stdout}")
+                print(f"[DEBUG LiveK8s] STDERR: {result.stderr}")
+                return {"error": f"kubectl failed: {result.stderr}", "pods": []}
+
             data = json.loads(result.stdout)
+
+            print(f"[DEBUG LiveK8s] Found {len(data.get('items', []))} pods for service={service}")
 
             pods = []
             for item in data.get("items", []):
+                pod_name = item["metadata"]["name"]
+                phase = item["status"]["phase"]
+                restarts = sum(cs.get("restartCount", 0) for cs in item["status"].get("containerStatuses", []))
+                print(f"[DEBUG LiveK8s]   - {pod_name}: {phase}, restarts={restarts}")
                 pods.append({
-                    "name": item["metadata"]["name"],
-                    "status": item["status"]["phase"],
-                    "restarts": sum(cs.get("restartCount", 0) for cs in item["status"].get("containerStatuses", [])),
+                    "name": pod_name,
+                    "status": phase,
+                    "restarts": restarts,
                     "ready": all(cs.get("ready", False) for cs in item["status"].get("containerStatuses", [])),
                     "node": item["spec"].get("nodeName"),
                 })
 
             return {"pods": pods}
         except Exception as e:
+            print(f"[DEBUG LiveK8s] EXCEPTION in get_pod_status: {e}")
+            import traceback
+            traceback.print_exc()
             return {"error": str(e), "pods": []}
 
     def get_pod_logs(self, service: str, tail_lines: int = 50) -> dict[str, Any]:
@@ -92,29 +119,64 @@ class LiveKubernetesClient:
             return {"error": str(e), "events": []}
 
     def get_deployment_history(self, service: str) -> dict[str, Any]:
-        """Get deployment history."""
+        """Get deployment history with resource specifications."""
         try:
+            # Get all ReplicaSets for this deployment
             result = subprocess.run(
-                ["kubectl", "rollout", "history", f"deployment/{service}", "-n", self.namespace, "-o", "json"],
+                ["kubectl", "get", "replicasets", "-l", f"app={service}", "-n", self.namespace, "-o", "json"],
                 capture_output=True,
                 text=True,
-                check=True
+                check=False
             )
 
-            # Parse output (it's not JSON, so we'll parse the text)
-            lines = result.stdout.strip().split("\n")
-            deployments = []
+            if result.returncode != 0:
+                print(f"[DEBUG LiveK8s] Failed to get ReplicaSets: {result.stderr}")
+                return {"deployments": []}
 
-            for line in lines[2:]:  # Skip header
-                parts = line.split()
-                if len(parts) >= 2:
-                    deployments.append({
-                        "revision": parts[0],
-                        "change_cause": " ".join(parts[1:]) if len(parts) > 1 else "unknown"
+            data = json.loads(result.stdout)
+            replicasets = []
+
+            # Sort by creation time to get revision order
+            items = sorted(
+                data.get("items", []),
+                key=lambda x: x.get("metadata", {}).get("creationTimestamp", ""),
+                reverse=True  # Most recent first
+            )
+
+            for rs in items[:5]:  # Get last 5 revisions
+                metadata = rs.get("metadata", {})
+                spec = rs.get("spec", {})
+                revision = metadata.get("annotations", {}).get("deployment.kubernetes.io/revision", "unknown")
+
+                # Extract resource specs
+                containers = spec.get("template", {}).get("spec", {}).get("containers", [])
+                container_resources = []
+                for container in containers:
+                    resources = container.get("resources", {})
+                    container_resources.append({
+                        "name": container.get("name"),
+                        "limits": resources.get("limits", {}),
+                        "requests": resources.get("requests", {})
                     })
 
-            return {"deployments": deployments}
+                replicasets.append({
+                    "revision": revision,
+                    "name": metadata.get("name"),
+                    "replicas": spec.get("replicas", 0),
+                    "image": containers[0].get("image", "unknown") if containers else "unknown",
+                    "resources": container_resources,
+                    "createdAt": metadata.get("creationTimestamp")
+                })
+
+            print(f"[DEBUG LiveK8s] Found {len(replicasets)} ReplicaSets for {service}")
+            for rs in replicasets:
+                print(f"  Revision {rs['revision']}: {rs.get('resources')}")
+
+            return {"deployments": replicasets}
         except Exception as e:
+            print(f"[DEBUG LiveK8s] Error in get_deployment_history: {e}")
+            import traceback
+            traceback.print_exc()
             return {"error": str(e), "deployments": []}
 
 
@@ -250,6 +312,15 @@ class LiveSlackClient:
                             "style": "danger",
                             "value": "reject",
                             "action_id": "reject_action"
+                        },
+                        {
+                            "type": "button",
+                            "text": {
+                                "type": "plain_text",
+                                "text": "🔄 Reject with Feedback"
+                            },
+                            "value": "reject_with_feedback",
+                            "action_id": "reject_with_feedback_action"
                         }
                     ]
                 }

@@ -1,0 +1,62 @@
+{
+  "1777793372.348589": {
+    "approval_id": "1777793372.348589",
+    "action_type": "",
+    "description": "**Action:** rollback\n**Description:** Remediation for: Memory limits set too low for the application's actual memory requirements, causing pods to be OOMKilled when memory usage exceeds the configured limit. This is exacerbated by the recent deployment of demo-app:v1 which may have introduced increased memory consumption.\n\n**Expected Effect:** Service should recover to normal operation after rollback\n**Blast Radius:** Medium - affects all pods of demo-app\n\n**Commands:**\n```\nkubectl rollout undo deployment/demo-app -n default\n```\n",
+    "status": "approved",
+    "approved_by": "tianhg468",
+    "feedback": null,
+    "created_at": 1777793372.5996811,
+    "updated_at": 1777793377.387072
+  },
+  "1777842523.492179": {
+    "approval_id": "1777842523.492179",
+    "action_type": "",
+    "description": "**Action:** rollback\n**Description:** Remediation for: Memory limits set too low for application workload, causing pods to exceed their memory limit and get OOMKilled by Kubernetes. This is the most common cause of OOMKilled errors and could be exacerbated by a recent deployment (demo-app:v1) that may have increased memory consumption without corresponding limit adjustments.\n\n**Expected Effect:** Service should recover to normal operation after rollback\n**Blast Radius:** Medium - affects all pods of demo-app\n\n**Commands:**\n```\nkubectl rollout undo deployment/demo-app -n default\n```\n",
+    "status": "pending",
+    "approved_by": null,
+    "feedback": null,
+    "created_at": 1777842523.660557,
+    "updated_at": 1777842523.660557
+  },
+  "1777842720.092509": {
+    "approval_id": "1777842720.092509",
+    "action_type": "",
+    "description": "**Action:** rollback\n**Description:** Remediation for: Memory limits set too low in pod specification relative to actual application memory requirements, causing pods to exceed allocated memory and trigger OOMKilled events\n\n**Expected Effect:** Service should recover to normal operation after rollback\n**Blast Radius:** Medium - affects all pods of demo-app\n\n**Commands:**\n```\nkubectl rollout undo deployment/demo-app -n default\n```\n",
+    "status": "pending",
+    "approved_by": null,
+    "feedback": null,
+    "created_at": 1777842720.242054,
+    "updated_at": 1777842720.242054
+  },
+  "1777843076.747849": {
+    "approval_id": "1777843076.747849",
+    "action_type": "",
+    "description": "**Action:** rollback\n**Description:** Remediation for: Memory limits set too low for application workload, causing pods to exceed allocated memory and trigger OOMKilled events. This is likely a deployment configuration issue where memory requests/limits don't match actual application requirements.\n\n**Expected Effect:** Service should recover to normal operation after rollback\n**Blast Radius:** Medium - affects all pods of demo-app\n\n**Commands:**\n```\nkubectl rollout undo deployment/demo-app -n default\n```\n",
+    "status": "approved",
+    "approved_by": "tianhg468",
+    "feedback": null,
+    "created_at": 1777843076.9002082,
+    "updated_at": 1777843091.0598552
+  },
+  "1777843848.872439": {
+    "approval_id": "1777843848.872439",
+    "action_type": "",
+    "description": "**Action:** rollback\n**Description:** Remediation for: Memory limits set too low for the application's actual memory requirements, causing pods to exceed their allocated memory and get OOMKilled by Kubernetes\n\n**Expected Effect:** Service should recover to normal operation after rollback\n**Blast Radius:** Medium - affects all pods of demo-app\n\n**Commands:**\n```\nkubectl rollout undo deployment/demo-app -n default\n```\n",
+    "status": "approved",
+    "approved_by": "tianhg468",
+    "feedback": null,
+    "created_at": 1777843849.080954,
+    "updated_at": 1777843861.390516
+  },
+  "1777844421.987459": {
+    "approval_id": "1777844421.987459",
+    "action_type": "",
+    "description": "**Action:** rollback\n**Description:** Remediation for: Memory limit set too low for the application's actual memory requirements, causing pods to exceed their memory allocation and get OOMKilled by Kubernetes. This is the most common cause of OOMKilled errors and is likely exacerbated by the deployment of demo-app:v1, which may have introduced code changes that increased memory consumption.\n\n**Expected Effect:** Rollback to revision 5 with higher memory limits\n**Blast Radius:** Medium - affects all pods of demo-app\n\n**Commands:**\n```\nkubectl rollout undo deployment/demo-app --to-revision=5 -n default\n```\n",
+    "status": "approved",
+    "approved_by": "tianhg468",
+    "feedback": null,
+    "created_at": 1777844422.160819,
+    "updated_at": 1777844429.288311
+  }
+}

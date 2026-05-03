@@ -152,8 +152,12 @@ class LiveKubernetesMCPServer:
         label_selector = arguments.get("label_selector", "")
         service = label_selector.split("=")[1] if "=" in label_selector else "default"
 
+        print(f"[DEBUG K8sMCP] _get_pod_status called with label_selector={label_selector}, extracted service={service}")
+
         # Get pod status from live client
         result = self.client.get_pod_status(service)
+
+        print(f"[DEBUG K8sMCP] Live client returned: {result}")
 
         # Transform to expected format
         pods = []
@@ -174,6 +178,8 @@ class LiveKubernetesMCPServer:
                     "nodeName": pod.get("node")
                 }
             })
+
+        print(f"[DEBUG K8sMCP] Returning {len(pods)} pods")
 
         return {
             "namespace": arguments.get("namespace", "default"),
@@ -213,11 +219,11 @@ class LiveKubernetesMCPServer:
     def _get_events(self, arguments: dict[str, Any]) -> dict[str, Any]:
         """Get Kubernetes events."""
         # Extract service name from field selector if provided
-        field_selector = arguments.get("field_selector", "")
-        if "involvedObject.name=" in field_selector:
+        field_selector = arguments.get("field_selector") or ""
+        if field_selector and "involvedObject.name=" in field_selector:
             service = field_selector.split("involvedObject.name=")[1]
         else:
-            service = "default"
+            service = "demo-app"  # Default to demo-app
 
         # Get events from live client
         result = self.client.get_events(service)
@@ -241,11 +247,17 @@ class LiveKubernetesMCPServer:
         }
 
     def _get_deployments(self, arguments: dict[str, Any]) -> dict[str, Any]:
-        """Get deployment information."""
+        """Get deployment information with rollout history."""
         deployment_name = arguments.get("deployment_name", "demo-app")
 
-        # Get deployment history from live client
+        print(f"[DEBUG K8sMCP] Getting deployment history for {deployment_name}")
+
+        # Get deployment history from live client (ReplicaSets with resource specs)
         result = self.client.get_deployment_history(deployment_name)
+
+        rollout_history = result.get("deployments", [])
+
+        print(f"[DEBUG K8sMCP] Got {len(rollout_history)} revisions in history")
 
         # Transform to expected format
         deployments = [{
@@ -259,7 +271,7 @@ class LiveKubernetesMCPServer:
             "status": {
                 "availableReplicas": 3
             },
-            "revisions": result.get("deployments", [])
+            "rolloutHistory": rollout_history  # Include full history with resource specs
         }]
 
         return {

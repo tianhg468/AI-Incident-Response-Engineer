@@ -93,11 +93,18 @@ def _verify_hypothesis(hypothesis: dict, incident: dict, evidence: dict) -> Veri
     llm = LLMClient()
     prompt = _build_verification_prompt(hypothesis, incident, evidence, verification_evidence)
 
-    result = llm.generate_json(prompt=prompt, max_tokens=1024)
+    # Increased max_tokens to 2048 to ensure enough space for complete response
+    result = llm.generate_json(prompt=prompt, max_tokens=2048)
+
+    # DEBUG: Print raw LLM response
+    print(f"   [DEBUG] LLM verification response: {json.dumps(result, indent=2)[:500]}")
+    if "error" in result:
+        print(f"   [DEBUG] Full error response: {json.dumps(result, indent=2)}")
 
     # Parse result
     if "error" in result:
         logger.error(f"LLM verification error: {result['error']}")
+        print(f"   [ERROR] LLM failed: {result['error']}")
         # Default to inconclusive if LLM fails
         return {
             "hypothesis": hypothesis,
@@ -150,6 +157,11 @@ def _run_verification_checks(checks: list[str], incident: dict, evidence: dict) 
 
     service = incident.get("service", "unknown-service")
 
+    # DEBUG: Show what evidence we have available
+    pods_count = len(evidence.get("pod_status", {}).get("pods", []))
+    events_count = len(evidence.get("pod_status", {}).get("events", []))
+    print(f"   [DEBUG] Running {len(checks)} verification checks with {pods_count} pods and {events_count} events")
+
     for check in checks:
         check_lower = check.lower()
 
@@ -172,16 +184,21 @@ def _run_verification_checks(checks: list[str], incident: dict, evidence: dict) 
                 pods = evidence.get("pod_status", {}).get("pods", [])
                 resource_info = []
 
+                print(f"   [DEBUG] Checking resources for {len(pods)} pods")
+
                 for pod in pods[:3]:  # Check first 3 pods
                     containers = pod.get("spec", {}).get("containers", [])
                     for container in containers:
                         resources = container.get("resources", {})
+                        limits = resources.get("limits", {})
+                        requests = resources.get("requests", {})
                         resource_info.append({
                             "pod": pod.get("metadata", {}).get("name"),
                             "container": container.get("name"),
-                            "limits": resources.get("limits", {}),
-                            "requests": resources.get("requests", {})
+                            "limits": limits,
+                            "requests": requests
                         })
+                        print(f"   [DEBUG] Pod {pod.get('metadata', {}).get('name')}: memory limit={limits.get('memory')}, request={requests.get('memory')}")
 
                 check_results.append({
                     "check": check,
@@ -193,11 +210,20 @@ def _run_verification_checks(checks: list[str], incident: dict, evidence: dict) 
             elif "event" in check_lower or "oom" in check_lower:
                 # Check for specific events
                 events = evidence.get("pod_status", {}).get("events", [])
+                print(f"   [DEBUG] Searching {len(events)} events for '{check_lower}'")
+
                 relevant_events = [
                     e for e in events
                     if check_lower.replace(" ", "") in e.get("reason", "").lower()
                     or check_lower.replace(" ", "") in e.get("message", "").lower()
                 ]
+
+                if relevant_events:
+                    print(f"   [DEBUG] Found {len(relevant_events)} matching events:")
+                    for evt in relevant_events[:3]:
+                        print(f"     - {evt.get('reason')}: {evt.get('message')[:60]}")
+                else:
+                    print(f"   [DEBUG] No events matching '{check_lower}'")
 
                 check_results.append({
                     "check": check,

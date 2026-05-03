@@ -12,12 +12,12 @@ import time
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 
-from webhook.approval_manager import ApprovalManager
+from webhook.approval_manager import get_approval_manager
 
 load_dotenv()
 
 app = Flask(__name__)
-approval_manager = ApprovalManager()
+approval_manager = get_approval_manager()  # Use singleton instead of creating new instance
 
 # Slack signing secret for verifying requests
 SLACK_SIGNING_SECRET = os.getenv("SLACK_SIGNING_SECRET", "").encode()
@@ -96,9 +96,11 @@ def handle_block_actions(payload):
 
         # Handle approval actions
         if action_id == "approve_action":
-            handle_approval(payload, user, approved=True)
+            handle_approval(payload, user, approved=True, feedback=None)
         elif action_id == "reject_action":
-            handle_approval(payload, user, approved=False)
+            handle_approval(payload, user, approved=False, feedback=None)
+        elif action_id == "reject_with_feedback_action":
+            handle_approval(payload, user, approved=False, feedback="Please provide feedback")  # Will be collected via CLI fallback
 
     # Update the message to show the action was taken
     return jsonify({
@@ -108,7 +110,7 @@ def handle_block_actions(payload):
     })
 
 
-def handle_approval(payload, user, approved):
+def handle_approval(payload, user, approved, feedback=None):
     """Handle approval or rejection of an action."""
     username = user.get("name", "unknown")
 
@@ -116,9 +118,14 @@ def handle_approval(payload, user, approved):
     # We'll use the message timestamp as a unique ID
     message_ts = payload.get("message", {}).get("ts", "")
 
+    print(f"   [DEBUG] Approval ID from Slack: '{message_ts}'")
+
     if approved:
         print(f"✅ APPROVED by {username}")
         approval_manager.approve(message_ts, username)
+    elif feedback is not None:
+        print(f"🔄 REJECTED WITH FEEDBACK by {username}")
+        approval_manager.reject_with_feedback(message_ts, username, feedback)
     else:
         print(f"❌ REJECTED by {username}")
         approval_manager.reject(message_ts, username)

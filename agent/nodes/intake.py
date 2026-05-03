@@ -125,13 +125,13 @@ def _create_placeholder_incident() -> Incident:
         Incident object
     """
     return {
-        "alert_id": "ALERT-PLACEHOLDER",
-        "service": "payment-service",
+        "alert_id": "ALERT-DEMO",
+        "service": "demo-app",
         "severity": "high",
         "time_window_start": datetime.now(),
         "time_window_end": datetime.now(),
         "affected_pods": [],
         "affected_endpoints": [],
-        "description": "Placeholder incident",
+        "description": "OOMKilled pods detected in demo-app deployment",
         "raw_alert": {}
     }

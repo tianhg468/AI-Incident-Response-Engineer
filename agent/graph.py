@@ -60,30 +60,69 @@ def route_after_verification(state: AgentState) -> Literal["diagnosis", "recover
         return "diagnosis"
 
 
-def route_after_recovery_proposal(state: AgentState) -> Literal["execution", "post_mortem"]:
+def route_after_recovery_proposal(state: AgentState) -> Literal["execution", "post_mortem", "diagnosis"]:
     """Route based on approval status.
 
     - approved → execution
     - rejected → post_mortem (log decision and close)
+    - rejected_with_feedback → diagnosis (loop back with human feedback)
     """
-    # TODO: Implement actual routing based on approval status
-    # For now, always route to execution
     recovery_proposal = state.get("recovery_proposal")
 
     if not recovery_proposal:
         # No proposal yet, go to execution (temporary)
         return "execution"
 
-    if recovery_proposal.get("approval_status") == "approved":
+    approval_status = recovery_proposal.get("approval_status")
+
+    if approval_status == "approved":
         return "execution"
+    elif approval_status == "rejected_with_feedback":
+        # Human provided feedback - go back to diagnosis with this feedback
+        print("🔄 Looping back to diagnosis with human feedback...")
+        return "diagnosis"
     else:
-        # Rejected or pending - for now go to post_mortem
+        # Rejected without feedback or timeout - end workflow
         return "post_mortem"
 
 
 def escalate_node(state: AgentState) -> AgentState:
     """Escalate to human when verification is inconclusive."""
     print("🚨 ESCALATION: Unable to confirm hypothesis, escalating to human...")
+
+    # Post escalation to Slack
+    incident = state.get("incident", {})
+    service = incident.get("service", "unknown")
+
+    try:
+        from agent.utils.mcp_client import get_mcp_client
+        mcp_client = get_mcp_client()
+
+        # Post escalation message to Slack
+        escalation_text = f"""🚨 *Escalation Required: {service}*
+
+Unable to confirm root cause after {state.get('verification_round', 0)} verification rounds.
+Manual investigation required.
+
+*Service:* {service}
+*Severity:* {incident.get('severity', 'unknown')}
+*Alert:* {incident.get('description', 'N/A')}
+
+The AI agent has exhausted its verification attempts. Please review the evidence and investigate manually.
+"""
+
+        mcp_client.call_tool(
+            "slack",
+            "slack_post_message",
+            {
+                "text": escalation_text,
+                "channel": "#incidents"
+            }
+        )
+        print("  📨 Posted escalation to Slack #incidents")
+    except Exception as e:
+        print(f"  ⚠️  Failed to post to Slack: {e}")
+
     return {
         **state,
         "status": "escalated",
@@ -150,7 +189,8 @@ def create_incident_response_graph(checkpointer=None, enable_checkpointing: bool
         route_after_recovery_proposal,
         {
             "execution": "execution",
-            "post_mortem": "post_mortem"
+            "post_mortem": "post_mortem",
+            "diagnosis": "diagnosis"  # Loop back if rejected with feedback
         }
     )
 
@@ -188,6 +228,7 @@ if __name__ == "__main__":
         "post_mortem": None,
         "status": "intake",
         "escalation_reason": None,
+        "human_feedback": None,
         "messages": [],
         "tool_calls": [],
         "started_at": datetime.now(),

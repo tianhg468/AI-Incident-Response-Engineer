@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: default
+data:
+  alertmanager.yml: |
+    global:
+      resolve_timeout: 5m
+
+    # Route alerts to different receivers based on labels
+    route:
+      group_by: ['alertname', 'service']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 1h
+      receiver: 'ai-agent-webhook'
+
+      routes:
+        # Route critical incidents to AI agent
+        - match:
+            severity: critical
+          receiver: 'ai-agent-webhook'
+          continue: true  # Also send to Slack
+
+        # Also notify in Slack
+        - match_re:
+            severity: critical|warning
+          receiver: 'slack-notifications'
+
+    receivers:
+      # AI Agent webhook receiver
+      - name: 'ai-agent-webhook'
+        webhook_configs:
+          - url: 'http://agent-webhook:8080/alerts'
+            send_resolved: true
+            http_config:
+              bearer_token: '${WEBHOOK_SECRET}'
+
+      # Slack notifications (for human awareness)
+      - name: 'slack-notifications'
+        slack_configs:
+          - api_url: '${SLACK_WEBHOOK_URL}'
+            channel: '#incidents'
+            title: '{{ .GroupLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Labels.alertname }}
+              *Severity:* {{ .Labels.severity }}
+              *Summary:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              {{ end }}
+
+    # Inhibit rules to prevent alert spam
+    inhibit_rules:
+      - source_match:
+          severity: 'critical'
+        target_match:
+          severity: 'warning'
+        equal: ['alertname', 'service']
