@@ -11,7 +11,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/demo-app
+  IMAGE_NAME: tianhg468/agentic-ai/demo-app
 
 jobs:
   build-and-deploy:
