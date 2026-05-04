@@ -81,9 +81,9 @@ jobs:
       - name: Deploy to Kubernetes (main branch only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          # Update image tag in deployment
+          # Update image tag in deployment (use main tag which always exists)
           kubectl set image deployment/demo-app \
-            demo-app=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }} \
+            demo-app=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main \
             -n default
 
           # Wait for rollout
