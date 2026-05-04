@@ -69,3 +69,8 @@ mcp_data/
 tmp/
 temp/
 *.tmp
+
+# Kubernetes secrets (NEVER commit these!)
+k8s/webhook-secrets.yaml
+k8s/webhook-kubeconfig.yaml
+kubeconfig.b64
