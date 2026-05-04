@@ -56,20 +56,35 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Configure AWS credentials
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Configure kubectl for EKS
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          # Clean kubeconfig to avoid conflicts
+          mkdir -p $HOME/.kube
+          rm -f $HOME/.kube/config
+
+          # Configure kubectl for EKS
+          aws eks update-kubeconfig --name demo-app-cluster --region ${{ secrets.AWS_REGION }}
+
+          # Verify connection
+          kubectl cluster-info
+          kubectl get nodes
+
       - name: Deploy to Kubernetes (main branch only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          # Configure kubectl
-          echo "${{ secrets.KUBECONFIG }}" | base64 -d > kubeconfig
-          export KUBECONFIG=./kubeconfig
-
           # Update image tag in deployment
           kubectl set image deployment/demo-app \
             demo-app=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }} \
             -n default
-
-          # Or apply the full deployment (if you changed deployment.yaml)
-          kubectl apply -f demo-app/k8s/deployment.yaml
 
           # Wait for rollout
           kubectl rollout status deployment/demo-app -n default --timeout=5m
