@@ -5,6 +5,7 @@ An autonomous agent that triages, diagnoses, and helps remediate production inci
 ## Overview
 
 This project implements an AI-powered incident response system that:
+
 - Receives alerts via webhook or CLI
 - Gathers evidence from observability and infrastructure tools via MCP
 - Forms and verifies hypotheses about root causes with backtracking
@@ -82,17 +83,20 @@ result = registry.call_tool("kubernetes", "k8s_get_pod_status", {...})
 ```
 
 **In eval mode** (`MODE=eval`):
+
 - Mock servers serve fixture data from `fixtures/scenarios/{scenario}/`
 - Deterministic, reproducible results for evaluation
 - No external dependencies (Kubernetes, GitHub, etc.)
 - Fast execution for CI/CD
 
 **In live mode** (`MODE=live`):
+
 - Real MCP servers via stdio or HTTP
 - Connects to actual Kubernetes clusters, GitHub API, etc.
 - Used for production incident response
 
 This dual-mode architecture enables:
+
 - Development and testing without live infrastructure
 - Reproducible eval scenarios with known ground truth
 - Easy transition from eval to production use
@@ -151,6 +155,7 @@ result = registry.call_tool("kubernetes", "k8s_get_pod_status", {...})
 ### Setup Guide
 
 See [`mcp_servers/real/README.md`](mcp_servers/real/README.md) for:
+
 - Installing/building MCP servers
 - Configuration examples for each service
 - Authentication setup
@@ -160,6 +165,7 @@ See [`mcp_servers/real/README.md`](mcp_servers/real/README.md) for:
 ## Checkpointing & Resumability
 
 **Investigations survive process restarts.** LangGraph's checkpointing persists the full agent state to a database, enabling:
+
 - Pause and resume investigations across restarts
 - Review historical investigations with complete transcripts
 - Debug and replay specific investigation steps
@@ -219,6 +225,7 @@ python tests/test_checkpointing.py
 ```
 
 This demonstrates:
+
 1. Starting an investigation with checkpointing
 2. Simulating a process restart
 3. Resuming from the exact checkpoint
@@ -244,16 +251,19 @@ streamlit run dashboard/app.py
 ### Features
 
 **Overview Page:**
+
 - Summary metrics (total, completed, escalated, avg rounds)
 - Distribution charts (by severity, by service)
 - Real-time auto-refresh option
 
 **Investigations List:**
+
 - Filter by status, severity, service
 - Quick view of key metrics
 - One-click access to details
 
 **Investigation Detail:**
+
 - Full incident information
 - All hypotheses with verification status
 - Recovery proposal and approval info
@@ -262,12 +272,14 @@ streamlit run dashboard/app.py
 ### Example Dashboard Views
 
 **Metrics Tracked:**
+
 - Total investigations: 15
 - Completion rate: 80%
 - Escalation rate: 20%
 - Avg verification rounds: 1.8
 
 **Filters:**
+
 - Status: completed, escalated, in_progress
 - Severity: critical, high, medium, low
 - Service: payment-service, user-service, etc.
@@ -396,16 +408,17 @@ python -m evals.runner
 
 **Target Metrics (Goals):**
 
-| Metric | Target Score |
-|--------|--------------|
-| Root Cause Accuracy (Exact) | ≥ 60% |
-| Root Cause Accuracy (Partial+) | ≥ 80% |
-| Remediation Acceptability | ≥ 75% |
-| Avg Verification Rounds | ≤ 2.5 |
-| Avg Cost per Incident | ≤ $0.015 |
-| Escalation Rate | ≤ 25% |
+| Metric                         | Target Score |
+| ------------------------------ | ------------ |
+| Root Cause Accuracy (Exact)    | ≥ 60%        |
+| Root Cause Accuracy (Partial+) | ≥ 80%        |
+| Remediation Acceptability      | ≥ 75%        |
+| Avg Verification Rounds        | ≤ 2.5        |
+| Avg Cost per Incident          | ≤ $0.015     |
+| Escalation Rate                | ≤ 25%        |
 
 **Current Scenarios:**
+
 - oom_after_deploy (Easy)
 - 5xx_spike_feature_flag (Medium)
 - dns_resolution_failure (Hard)
@@ -417,6 +430,7 @@ See [`evals/README.md`](evals/README.md) for details on the evaluation harness.
 ## Architecture
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for comprehensive architecture documentation including:
+
 - System overview diagram
 - Data flow sequences
 - Component architecture
@@ -427,6 +441,7 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for comprehensive architecture document
 ## Worked Example
 
 See [`EXAMPLE.md`](EXAMPLE.md) for a complete walkthrough of an OOM incident investigation:
+
 - Step-by-step transcript from alert to resolution
 - Evidence collection and hypothesis generation
 - Verification process and LLM evaluation
@@ -439,6 +454,7 @@ See [`EXAMPLE.md`](EXAMPLE.md) for a complete walkthrough of an OOM incident inv
 See [`LIMITATIONS.md`](LIMITATIONS.md) for honest assessment of current limitations:
 
 **Current Limitations**:
+
 - Hypothesis generation quality depends on evidence
 - Verification check interpretation uses simple keyword matching
 - Limited to 5 action types (rollback, scale, restart, config_change, patch)
@@ -447,11 +463,13 @@ See [`LIMITATIONS.md`](LIMITATIONS.md) for honest assessment of current limitati
 - Eval coverage limited to 5 scenarios
 
 **Observed Failure Modes**:
+
 - False confirmation due to misleading evidence (~5% in evals)
 - Infinite verification loops (mitigated by max rounds limit)
 - Evidence gathering timeouts (no timeout handling yet)
 
 **Recommendations for Production**:
+
 - Expand eval scenarios to 15-25
 - Add timeout handling to all MCP calls
 - Implement secret redaction in logs
@@ -459,6 +477,7 @@ See [`LIMITATIONS.md`](LIMITATIONS.md) for honest assessment of current limitati
 - Security review of approval flow
 
 **Gradual Rollout Strategy**:
+
 1. Shadow mode (observe only)
 2. Propose remediations (require approval)
 3. Auto-execute low-risk actions
@@ -466,16 +485,14 @@ See [`LIMITATIONS.md`](LIMITATIONS.md) for honest assessment of current limitati
 
 ## Project Statistics
 
-| Metric | Value |
-|--------|-------|
+| Metric                  | Value   |
+| ----------------------- | ------- |
 | **Total Lines of Code** | ~11,100 |
-| **Agent Nodes** | 7 |
-| **MCP Tools (Mock)** | 22 |
-| **MCP Servers (Live)** | 5 |
-| **Eval Scenarios** | 5 |
-| **Test Files** | 6 |
-| **Documentation Pages** | 7 |
+| **Agent Nodes**         | 7       |
+| **MCP Tools (Mock)**    | 22      |
+| **MCP Servers (Live)**  | 5       |
+| **Eval Scenarios**      | 5       |
+| **Test Files**          | 6       |
+| **Documentation Pages** | 7       |
 
 ## License
-
-MIT
