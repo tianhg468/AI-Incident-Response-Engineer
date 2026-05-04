@@ -4,13 +4,10 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'demo-app/**'
   pull_request:
     branches:
       - main
-    paths:
-      - 'demo-app/**'
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -43,9 +40,9 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=sha,prefix={{branch}}-
             type=ref,event=branch
-            type=semver,pattern={{version}}
+            type=ref,event=pr
+            type=sha,prefix=sha-
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -66,7 +63,7 @@ jobs:
 
           # Update image tag in deployment
           kubectl set image deployment/demo-app \
-            demo-app=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main-${{ github.sha }} \
+            demo-app=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }} \
             -n default
 
           # Or apply the full deployment (if you changed deployment.yaml)
@@ -81,4 +78,4 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           echo "🚀 Deployed commit ${{ github.sha }} to Kubernetes"
-          echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main-${{ github.sha }}"
+          echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}"
