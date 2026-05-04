@@ -79,8 +79,6 @@ spec:
         - name: kubeconfig
           mountPath: /kubeconfig
           readOnly: true
-      imagePullSecrets:
-      - name: ghcr-secret
       volumes:
       - name: data
         emptyDir: {}
