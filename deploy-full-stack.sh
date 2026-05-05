@@ -109,6 +109,39 @@ if [ -z "$GITHUB_TOKEN" ]; then
 fi
 print_success "GITHUB_TOKEN is set"
 
+# Check if flux is installed
+if ! command -v flux &> /dev/null; then
+    print_warning "Flux CLI not found!"
+    echo ""
+    echo "Installing Flux CLI..."
+
+    # Detect OS
+    OS="$(uname -s)"
+    case "${OS}" in
+        Darwin*)
+            if command -v brew &> /dev/null; then
+                brew install fluxcd/tap/flux
+            else
+                print_error "Homebrew not found. Please install Flux manually:"
+                echo "  https://fluxcd.io/flux/installation/"
+                exit 1
+            fi
+            ;;
+        Linux*)
+            curl -s https://fluxcd.io/install.sh | sudo bash
+            ;;
+        *)
+            print_error "Unsupported OS: ${OS}"
+            echo "Please install Flux manually: https://fluxcd.io/flux/installation/"
+            exit 1
+            ;;
+    esac
+
+    print_success "Flux CLI installed"
+else
+    print_success "Flux CLI is installed"
+fi
+
 # Generate webhook secret if not set
 if [ -z "$WEBHOOK_SECRET" ]; then
     export WEBHOOK_SECRET=$(openssl rand -hex 32)
@@ -184,7 +217,58 @@ print_success "Agent webhook is ready!"
 
 echo ""
 echo "==========================================="
-echo "Step 5: Installing Prometheus Stack"
+echo "Step 5: Installing Flux CD (GitOps)"
+echo "==========================================="
+echo ""
+
+# Check if Flux is already installed in the cluster
+if kubectl get namespace flux-system &>/dev/null; then
+    print_warning "Flux CD already installed"
+    echo ""
+    read -p "Reinstall Flux CD? (y/n) " -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        flux uninstall --silent
+        print_info "Flux uninstalled"
+    else
+        print_info "Skipping Flux installation"
+        SKIP_FLUX=true
+    fi
+fi
+
+if [ "$SKIP_FLUX" != "true" ]; then
+    print_info "Bootstrapping Flux CD to sync from GitHub repository..."
+    print_warning "This will create a 'flux-system' directory in your repo with Flux manifests"
+    echo ""
+
+    # Set GitHub org and repo
+    GITHUB_ORG="${GITHUB_ORG:-tianhg468}"
+    GITHUB_REPO="${GITHUB_REPO:-agentic_ai}"
+    GITHUB_BRANCH="${GITHUB_BRANCH:-main}"
+
+    # Bootstrap Flux
+    export GITHUB_TOKEN
+    flux bootstrap github \
+      --owner="$GITHUB_ORG" \
+      --repository="$GITHUB_REPO" \
+      --branch="$GITHUB_BRANCH" \
+      --path=./k8s \
+      --personal \
+      --read-write-key
+
+    print_success "Flux CD installed and bootstrapped!"
+    echo ""
+    print_info "Flux will now automatically sync changes from:"
+    echo "  Repository: $GITHUB_ORG/$GITHUB_REPO"
+    echo "  Branch: $GITHUB_BRANCH"
+    echo "  Path: ./k8s"
+    echo ""
+    print_info "Any changes pushed to Git will be automatically deployed to the cluster!"
+fi
+
+echo ""
+echo "==========================================="
+echo "Step 6: Installing Prometheus Stack"
 echo "==========================================="
 echo ""
 
@@ -312,7 +396,7 @@ fi
 
 echo ""
 echo "==========================================="
-echo "Step 6: Starting GitOps Monitor Dashboard"
+echo "Step 7: Starting GitOps Monitor Dashboard"
 echo "==========================================="
 echo ""
 
@@ -348,6 +432,8 @@ echo "-----------------"
 echo "View all pods:        kubectl get pods -A"
 echo "View agent logs:      kubectl logs -f -l app=agent-webhook"
 echo "View demo-app logs:   kubectl logs -f -l app=demo-app"
+echo "Flux status:          flux get all"
+echo "Force Flux sync:      flux reconcile kustomization flux-system --with-source"
 echo "GitOps Monitor:       python dashboard/gitops_monitor.py"
 echo "AI Dashboard:         streamlit run dashboard/app.py"
 echo "Delete cluster:       ./test-and-cleanup.sh (option 2)"

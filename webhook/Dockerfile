@@ -30,5 +30,5 @@ RUN pip install --no-cache-dir -e .
 # Expose webhook port
 EXPOSE 8080
 
-# Run the alert webhook server
-CMD ["python", "-m", "webhook.alert_webhook"]
+# Run the unified webhook server (alerts + Slack)
+CMD ["python", "-m", "webhook.unified_webhook"]

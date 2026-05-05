@@ -4,6 +4,7 @@ metadata:
   name: incident-response-rules
   namespace: monitoring
   labels:
+    release: prometheus
     prometheus: kube-prometheus
     role: alert-rules
 spec:
@@ -31,7 +32,7 @@ spec:
             rate(kube_pod_container_status_restarts_total[15m]) > 0
           for: 5m
           labels:
-            severity: warning
+            severity: critical
             team: sre
             alert_type: crashloop
           annotations:

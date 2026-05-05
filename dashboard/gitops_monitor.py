@@ -98,6 +98,65 @@ def get_prometheus_alerts():
         return []
 
 
+def get_incident_data():
+    """Get current incident data from webhook pod. Returns None if no active incident."""
+    try:
+        # Get webhook pod name
+        pod_output = run_kubectl("get pod -l app=agent-webhook -o jsonpath='{.items[0].metadata.name}'")
+        pod_name = pod_output.strip().strip("'")
+
+        if not pod_name or 'Error' in pod_name:
+            return None
+
+        # Read incident data
+        incident_output = run_kubectl(f"exec {pod_name} -- cat /app/data/current_incident.json")
+
+        if incident_output and 'Error' not in incident_output:
+            incident_data = json.loads(incident_output)
+            # Check if incident is still active by checking if it's recent (within last 10 minutes)
+            triggered_at = incident_data.get('triggered_at')
+            if triggered_at:
+                from datetime import datetime as dt, timedelta
+                try:
+                    start_time = dt.fromisoformat(triggered_at.replace('Z', '+00:00'))
+                    elapsed = (dt.now(start_time.tzinfo) - start_time).total_seconds()
+                    # Only return incident if it's less than 10 minutes old and no resolution
+                    if elapsed < 600 and incident_data.get('status') != 'resolved':
+                        return incident_data
+                except:
+                    pass
+    except:
+        pass
+
+    return None
+
+
+def get_approvals_data():
+    """Get pending approvals/remediation actions from webhook pod."""
+    try:
+        # Get webhook pod name
+        pod_output = run_kubectl("get pod -l app=agent-webhook -o jsonpath='{.items[0].metadata.name}'")
+        pod_name = pod_output.strip().strip("'")
+
+        if not pod_name or 'Error' in pod_name:
+            return []
+
+        # Read approvals data
+        approvals_output = run_kubectl(f"exec {pod_name} -- cat /app/data/approvals.json")
+
+        if approvals_output and 'Error' not in approvals_output:
+            approvals_dict = json.loads(approvals_output)
+            # Convert to list and get most recent
+            approvals_list = list(approvals_dict.values())
+            # Sort by created_at descending
+            approvals_list.sort(key=lambda x: x.get('created_at', 0), reverse=True)
+            return approvals_list[:5]  # Return 5 most recent
+    except:
+        pass
+
+    return []
+
+
 def get_webhook_logs():
     """Get recent webhook logs."""
     output = run_kubectl("logs deployment/agent-webhook --tail=200")
@@ -118,7 +177,18 @@ def get_webhook_logs():
     current_phase = None
 
     for line in lines:
-        # Store all logs
+        # Filter out health check logs and Flask server noise
+        if any(skip in line for skip in [
+            'GET /health HTTP/1.1',
+            '10.0.93.144',
+            '10.0.118.207',
+            'WARNING: This is a development server',
+            'Running on http://',
+            'Press CTRL+C to quit'
+        ]):
+            continue
+
+        # Store all logs (excluding health checks)
         if line.strip():
             investigation['allLogs'].append({
                 'timestamp': datetime.now().isoformat(),
@@ -245,11 +315,41 @@ def index():
 @app.route('/api/status')
 def status():
     """Get current status of all components."""
+    investigation = get_webhook_logs()
+    incident_data = get_incident_data()
+    approvals = get_approvals_data()
+
+    # Merge incident data into investigation
+    if incident_data:
+        investigation['incidentData'] = incident_data
+        investigation['active'] = True
+
+        # Determine phase based on available data
+        if approvals and approvals[0].get('status') == 'pending':
+            # Has pending approvals = reached remediation phase
+            investigation['phase'] = 'creating_fix'
+            investigation['remediationActions'] = approvals
+        elif not investigation['phase'] or investigation['phase'] == 'idle':
+            # Calculate time since investigation started
+            triggered_at = incident_data.get('triggered_at')
+            if triggered_at:
+                from datetime import datetime as dt
+                start_time = dt.fromisoformat(triggered_at.replace('Z', '+00:00'))
+                elapsed = (dt.now(start_time.tzinfo) - start_time).total_seconds()
+
+                # Estimate phase based on elapsed time
+                if elapsed < 30:
+                    investigation['phase'] = 'gathering_evidence'
+                elif elapsed < 60:
+                    investigation['phase'] = 'analyzing'
+                else:
+                    investigation['phase'] = 'creating_fix'
+
     return jsonify({
         'timestamp': datetime.now().isoformat(),
         'pods': get_pod_status(),
         'alerts': get_prometheus_alerts(),
-        'agentInvestigation': get_webhook_logs(),
+        'agentInvestigation': investigation,
         'pullRequests': get_github_prs(),
         'githubActions': get_github_actions()
     })
