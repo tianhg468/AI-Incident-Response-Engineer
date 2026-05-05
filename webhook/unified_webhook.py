@@ -1,7 +1,6 @@
-"""Alert webhook server for receiving Prometheus AlertManager alerts.
+"""Unified webhook server for both Prometheus alerts and Slack interactions.
 
-This server receives alerts from Prometheus and triggers the AI agent
-to investigate and remediate incidents automatically.
+Combines alert_webhook and slack_webhook into a single service.
 """
 
 import os
@@ -9,10 +8,13 @@ import json
 import hmac
 import hashlib
 import subprocess
+import time
 import logging
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 from datetime import datetime
+
+from webhook.approval_manager import get_approval_manager
 
 load_dotenv()
 
@@ -22,9 +24,18 @@ app = Flask(__name__)
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
+# Configuration
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "").encode()
+SLACK_SIGNING_SECRET = os.getenv("SLACK_SIGNING_SECRET", "").encode()
 AGENT_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# Approval manager for Slack interactions
+approval_manager = get_approval_manager()
+
+
+# ============================================================================
+# ALERT WEBHOOK (Prometheus)
+# ============================================================================
 
 def verify_bearer_token(request):
     """Verify the bearer token from AlertManager."""
@@ -46,7 +57,7 @@ def health():
     """Health check endpoint."""
     return jsonify({
         "status": "healthy",
-        "service": "alert-webhook",
+        "service": "unified-webhook",
         "version": "1.0.0"
     })
 
@@ -76,11 +87,7 @@ def receive_alert():
 
 
 def process_alert(alert: dict):
-    """Process a single alert and trigger the agent if needed.
-
-    Args:
-        alert: Alert data from AlertManager
-    """
+    """Process a single alert and trigger the agent if needed."""
     labels = alert.get("labels", {})
     annotations = alert.get("annotations", {})
     status = alert.get("status", "unknown")
@@ -109,13 +116,7 @@ def process_alert(alert: dict):
 
 
 def trigger_agent(service: str, alert_type: str, alert: dict):
-    """Trigger the AI agent to investigate an incident.
-
-    Args:
-        service: Service name
-        alert_type: Type of alert (oomkilled, crashloop, etc.)
-        alert: Full alert data
-    """
+    """Trigger the AI agent to investigate an incident."""
     try:
         # Create incident file with alert data for the agent
         incident_data = {
@@ -151,38 +152,153 @@ def trigger_agent(service: str, alert_type: str, alert: dict):
         print(f"   ❌ Error triggering agent: {e}")
 
 
-def run_alert_webhook(host="0.0.0.0", port=8080):
-    """Run the alert webhook server."""
+# ============================================================================
+# SLACK WEBHOOK (Interactive Components)
+# ============================================================================
+
+def verify_slack_signature(request):
+    """Verify that the request came from Slack."""
+    if not SLACK_SIGNING_SECRET:
+        # In development, skip verification if no secret configured
+        return True
+
+    # Get the signature from the request headers
+    slack_signature = request.headers.get("X-Slack-Signature", "")
+    slack_timestamp = request.headers.get("X-Slack-Request-Timestamp", "")
+
+    # Prevent replay attacks
+    if abs(time.time() - int(slack_timestamp)) > 60 * 5:
+        return False
+
+    # Verify the signature
+    sig_basestring = f"v0:{slack_timestamp}:{request.get_data(as_text=True)}"
+    my_signature = "v0=" + hmac.new(
+        SLACK_SIGNING_SECRET,
+        sig_basestring.encode(),
+        hashlib.sha256
+    ).hexdigest()
+
+    return hmac.compare_digest(my_signature, slack_signature)
+
+
+@app.route("/slack/interactions", methods=["POST"])
+def slack_interactions():
+    """Handle Slack interactive component events (button clicks)."""
+
+    # Verify the request came from Slack
+    if not verify_slack_signature(request):
+        print("❌ Invalid Slack signature")
+        return jsonify({"error": "Invalid signature"}), 403
+
+    # Parse the payload
+    payload = json.loads(request.form.get("payload", "{}"))
+
+    # Log the interaction
+    print(f"\n📨 Received Slack interaction:")
+    print(f"   Type: {payload.get('type')}")
+    print(f"   User: {payload.get('user', {}).get('name')}")
+
+    # Handle block actions (button clicks)
+    if payload.get("type") == "block_actions":
+        return handle_block_actions(payload)
+
+    return jsonify({"status": "ok"})
+
+
+def handle_block_actions(payload):
+    """Handle button clicks from Slack messages."""
+    actions = payload.get("actions", [])
+    user = payload.get("user", {})
+
+    for action in actions:
+        action_id = action.get("action_id")
+        action_value = action.get("value")
+
+        print(f"   Action: {action_id} = {action_value}")
+
+        # Handle approval actions
+        if action_id == "approve_action":
+            approval_id = action_value
+            approval_manager.approve(
+                approval_id,
+                approved_by=user.get('name', 'slack_user')
+            )
+            print(f"   ✅ Approved: {approval_id}")
+
+            return jsonify({
+                "text": f"✅ Approved by {user.get('name')}",
+                "replace_original": True
+            })
+
+        elif action_id == "reject_action":
+            approval_id = action_value
+            approval_manager.reject(
+                approval_id,
+                rejected_by=user.get('name', 'slack_user')
+            )
+            print(f"   ❌ Rejected: {approval_id}")
+
+            return jsonify({
+                "text": f"❌ Rejected by {user.get('name')}",
+                "replace_original": True
+            })
+
+    return jsonify({"status": "ok"})
+
+
+@app.route("/slack/events", methods=["POST"])
+def slack_events():
+    """Handle Slack events (for URL verification)."""
+    payload = request.json
+
+    # Handle URL verification challenge
+    if payload.get("type") == "url_verification":
+        return jsonify({"challenge": payload.get("challenge")})
+
+    return jsonify({"status": "ok"})
+
+
+# ============================================================================
+# MAIN
+# ============================================================================
+
+def run_unified_webhook(host="0.0.0.0", port=8080):
+    """Run the unified webhook server."""
     print(f"""
 ╔════════════════════════════════════════════════════════════════╗
-║        Alert Webhook Server - Production Mode                  ║
+║        Unified Webhook Server - Production Mode                ║
 ╚════════════════════════════════════════════════════════════════╝
 
-🚀 Starting alert webhook server...
+🚀 Starting unified webhook server...
 
    Host: {host}
    Port: {port}
 
    Endpoints:
-   • POST /alerts   - Receives Prometheus alerts
-   • GET  /health   - Health check
+   • POST /alerts                - Receives Prometheus alerts
+   • POST /slack/interactions    - Receives Slack button clicks
+   • POST /slack/events          - Receives Slack events
+   • GET  /health                - Health check
 
-⚠️  IMPORTANT: Configure Prometheus AlertManager to send alerts here:
+⚠️  Configuration:
 
-   In alertmanager.yml:
+   AlertManager:
    receivers:
      - name: 'ai-agent-webhook'
        webhook_configs:
          - url: 'http://{host}:{port}/alerts'
            bearer_token: '${{WEBHOOK_SECRET}}'
 
+   Slack App Interactivity URL:
+   https://YOUR-NGROK-URL/slack/interactions
+
 ════════════════════════════════════════════════════════════════
 
-Waiting for alerts...
+Waiting for alerts and Slack interactions...
 """)
 
     app.run(host=host, port=port, debug=False)
 
 
 if __name__ == "__main__":
-    run_alert_webhook()
+    run_unified_webhook()

@@ -43,6 +43,20 @@ spec:
           value: "tianhg468"
         - name: GITHUB_REPO
           value: "agentic_ai"
+        - name: SLACK_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: webhook-secrets
+              key: slack-bot-token
+              optional: true
+        - name: SLACK_SIGNING_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: webhook-secrets
+              key: slack-signing-secret
+              optional: true
+        - name: SLACK_CHANNEL
+          value: "#incidents"
         - name: EXECUTION_MODE
           value: "gitops"
         - name: MODE
