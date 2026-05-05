@@ -1,4 +1,4 @@
-name: Deploy to Kubernetes
+name: Build Docker Image
 
 on:
   push:
@@ -14,7 +14,7 @@ env:
   IMAGE_NAME: tianhg468/agentic-ai/demo-app
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -56,43 +56,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Configure AWS credentials
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Configure kubectl for EKS
+      - name: Build complete
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          # Clean kubeconfig to avoid conflicts
-          mkdir -p $HOME/.kube
-          rm -f $HOME/.kube/config
-
-          # Configure kubectl for EKS
-          aws eks update-kubeconfig --name demo-app-cluster --region ${{ secrets.AWS_REGION }}
-
-          # Verify connection
-          kubectl cluster-info
-          kubectl get nodes
-
-      - name: Deploy to Kubernetes (main branch only)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          # Update image tag in deployment (use main tag which always exists)
-          kubectl set image deployment/demo-app \
-            demo-app=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main \
-            -n default
-
-          # Wait for rollout
-          kubectl rollout status deployment/demo-app -n default --timeout=5m
-
-          echo "✅ Deployment successful!"
-
-      - name: Post deployment notification
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          echo "🚀 Deployed commit ${{ github.sha }} to Kubernetes"
-          echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}"
+          echo "✅ Docker image built and pushed successfully!"
+          echo "📦 Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main"
+          echo "🚀 Flux CD will automatically deploy this to Kubernetes"
