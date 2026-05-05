@@ -15,6 +15,7 @@ spec:
       labels:
         app: agent-webhook
     spec:
+      serviceAccountName: agent-webhook
       containers:
       - name: webhook
         image: ghcr.io/tianhg468/agentic_ai/webhook:latest
@@ -50,8 +51,6 @@ spec:
           value: "sqlite"
         - name: CHECKPOINT_DB_PATH
           value: "/data/checkpoints.db"
-        - name: KUBECONFIG
-          value: "/kubeconfig/config"
         - name: K8S_NAMESPACE
           value: "default"
         resources:
@@ -76,15 +75,9 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /data
-        - name: kubeconfig
-          mountPath: /kubeconfig
-          readOnly: true
       volumes:
       - name: data
         emptyDir: {}
-      - name: kubeconfig
-        secret:
-          secretName: webhook-kubeconfig
 ---
 apiVersion: v1
 kind: Service
