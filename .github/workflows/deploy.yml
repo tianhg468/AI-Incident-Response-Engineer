@@ -14,7 +14,7 @@ env:
   IMAGE_NAME: tianhg468/agentic-ai/demo-app
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: read
