@@ -143,15 +143,7 @@ if ! kubectl get secret webhook-secrets &>/dev/null; then
     print_success "webhook-secrets created"
 fi
 
-if kubectl get secret webhook-kubeconfig &>/dev/null; then
-    print_warning "webhook-kubeconfig already exists"
-else
-    print_info "Creating webhook-kubeconfig..."
-    kubectl config view --flatten --minify > /tmp/kubeconfig
-    kubectl create secret generic webhook-kubeconfig --from-file=config=/tmp/kubeconfig
-    rm /tmp/kubeconfig
-    print_success "webhook-kubeconfig created"
-fi
+# webhook-kubeconfig no longer needed - using in-cluster authentication via ServiceAccount
 
 echo ""
 echo "==========================================="
@@ -169,6 +161,10 @@ echo "==========================================="
 echo "Step 4: Deploying AI Agent Webhook"
 echo "==========================================="
 echo ""
+
+print_info "Creating webhook RBAC (ServiceAccount, ClusterRole, ClusterRoleBinding)..."
+kubectl apply -f k8s/webhook-rbac.yaml
+print_success "Webhook RBAC created"
 
 print_info "Deploying agent-webhook..."
 kubectl apply -f k8s/webhook-deployment.yaml
@@ -227,9 +223,55 @@ if [ "$SKIP_PROMETHEUS" != "true" ]; then
     fi
 
     echo ""
-    print_info "Applying custom alert rules..."
-    kubectl apply -f prometheus/alert-rules.yml
+    print_info "Applying custom alert rules (PrometheusRule)..."
+    kubectl apply -f prometheus/prometheus-rule.yml
     print_success "Alert rules applied"
+
+    echo ""
+    print_info "Configuring AlertManager to send alerts to webhook..."
+
+    # Update AlertManager config to route to webhook
+    kubectl get secret -n monitoring alertmanager-prometheus-kube-prometheus-alertmanager -o json | \
+      jq '.data["alertmanager.yaml"]' -r | base64 -d > /tmp/alertmanager.yaml
+
+    # Check if webhook route already exists
+    if grep -q "ai-agent-webhook" /tmp/alertmanager.yaml; then
+        print_warning "AlertManager already configured for webhook"
+    else
+        # Add webhook receiver and route
+        cat > /tmp/alertmanager.yaml << EOF
+global:
+  resolve_timeout: 5m
+receivers:
+- name: "null"
+- name: "ai-agent-webhook"
+  webhook_configs:
+  - url: 'http://agent-webhook.default.svc.cluster.local:8080/alerts'
+    send_resolved: true
+    http_config:
+      bearer_token: '$WEBHOOK_SECRET'
+route:
+  group_by:
+  - namespace
+  - alertname
+  group_interval: 10s
+  group_wait: 10s
+  receiver: "ai-agent-webhook"
+  repeat_interval: 1h
+EOF
+
+        kubectl create secret generic alertmanager-prometheus-kube-prometheus-alertmanager \
+          --from-file=alertmanager.yaml=/tmp/alertmanager.yaml \
+          -n monitoring \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+        # Restart AlertManager to pick up new config
+        kubectl delete pod -n monitoring -l app.kubernetes.io/name=alertmanager
+
+        print_success "AlertManager configured"
+    fi
+
+    rm /tmp/alertmanager.yaml
 fi
 
 echo ""
