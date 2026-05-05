@@ -308,17 +308,17 @@ def status():
     approvals = get_approvals_data()
     alerts = get_prometheus_alerts()
 
-    # Only show incident if there's a matching active alert
-    if incident_data and alerts:
-        # Check if there's an active alert matching this incident
-        incident_pod = incident_data.get('alert_data', {}).get('labels', {}).get('pod', '')
+    # Optionally validate incident against Prometheus alerts (only if Prometheus is accessible)
+    if incident_data and alerts and len(alerts) > 0:
+        # Prometheus is accessible - validate that incident still has active alert
+        incident_alertname = incident_data.get('alert_data', {}).get('labels', {}).get('alertname')
         has_matching_alert = any(
-            alert.get('name') == incident_data.get('alert_data', {}).get('labels', {}).get('alertname')
+            alert.get('name') == incident_alertname
             for alert in alerts
         )
 
         if not has_matching_alert:
-            # No matching alert, don't show the incident
+            # Alert has resolved - clear the incident
             incident_data = None
 
     # Merge incident data into investigation

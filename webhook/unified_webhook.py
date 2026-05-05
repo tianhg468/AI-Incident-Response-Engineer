@@ -115,9 +115,45 @@ def process_alert(alert: dict):
         print(f"   ⏸️  Severity {severity}, not triggering agent")
 
 
+def is_agent_running():
+    """Check if an agent is currently investigating."""
+    try:
+        # Check for running agent processes
+        result = subprocess.run(
+            ["pgrep", "-f", "agent.graph"],
+            capture_output=True,
+            text=True
+        )
+        return bool(result.stdout.strip())
+    except:
+        return False
+
+
 def trigger_agent(service: str, alert_type: str, alert: dict):
     """Trigger the AI agent to investigate an incident."""
     try:
+        # Check if an agent is already running
+        if is_agent_running():
+            print(f"   ⏸️  Agent already investigating, skipping trigger")
+            return
+
+        # Check if there's a recent incident (within last 10 minutes)
+        incident_file = os.path.join(AGENT_REPO, "data", "current_incident.json")
+        if os.path.exists(incident_file):
+            with open(incident_file, 'r') as f:
+                existing = json.load(f)
+                triggered_at = existing.get('triggered_at', '')
+                if triggered_at:
+                    try:
+                        from datetime import datetime as dt, timedelta
+                        incident_time = dt.fromisoformat(triggered_at)
+                        age = (dt.now() - incident_time).total_seconds()
+                        if age < 600:  # Less than 10 minutes old
+                            print(f"   ⏸️  Recent incident already exists ({int(age)}s old), skipping trigger")
+                            return
+                    except:
+                        pass
+
         # Create incident file with alert data for the agent
         incident_data = {
             "service": service,
@@ -127,9 +163,7 @@ def trigger_agent(service: str, alert_type: str, alert: dict):
             "alert_data": alert
         }
 
-        incident_file = os.path.join(AGENT_REPO, "data", "current_incident.json")
         os.makedirs(os.path.dirname(incident_file), exist_ok=True)
-
         with open(incident_file, 'w') as f:
             json.dump(incident_data, f, indent=2)
 
