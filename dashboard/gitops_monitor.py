@@ -99,7 +99,7 @@ def get_prometheus_alerts():
 
 
 def get_incident_data():
-    """Get current incident data from webhook pod. Returns None if no active incident."""
+    """Get current incident data from webhook pod. Validation happens in status endpoint."""
     try:
         # Get webhook pod name
         pod_output = run_kubectl("get pod -l app=agent-webhook -o jsonpath='{.items[0].metadata.name}'")
@@ -112,19 +112,7 @@ def get_incident_data():
         incident_output = run_kubectl(f"exec {pod_name} -- cat /app/data/current_incident.json")
 
         if incident_output and 'Error' not in incident_output:
-            incident_data = json.loads(incident_output)
-            # Check if incident is still active by checking if it's recent (within last 10 minutes)
-            triggered_at = incident_data.get('triggered_at')
-            if triggered_at:
-                from datetime import datetime as dt, timedelta
-                try:
-                    start_time = dt.fromisoformat(triggered_at.replace('Z', '+00:00'))
-                    elapsed = (dt.now(start_time.tzinfo) - start_time).total_seconds()
-                    # Only return incident if it's less than 10 minutes old and no resolution
-                    if elapsed < 600 and incident_data.get('status') != 'resolved':
-                        return incident_data
-                except:
-                    pass
+            return json.loads(incident_output)
     except:
         pass
 
@@ -318,6 +306,20 @@ def status():
     investigation = get_webhook_logs()
     incident_data = get_incident_data()
     approvals = get_approvals_data()
+    alerts = get_prometheus_alerts()
+
+    # Only show incident if there's a matching active alert
+    if incident_data and alerts:
+        # Check if there's an active alert matching this incident
+        incident_pod = incident_data.get('alert_data', {}).get('labels', {}).get('pod', '')
+        has_matching_alert = any(
+            alert.get('name') == incident_data.get('alert_data', {}).get('labels', {}).get('alertname')
+            for alert in alerts
+        )
+
+        if not has_matching_alert:
+            # No matching alert, don't show the incident
+            incident_data = None
 
     # Merge incident data into investigation
     if incident_data:
@@ -344,11 +346,17 @@ def status():
                     investigation['phase'] = 'analyzing'
                 else:
                     investigation['phase'] = 'creating_fix'
+    else:
+        # No valid incident - clear investigation state
+        investigation['active'] = False
+        investigation['phase'] = 'idle'
+        investigation['incidentData'] = None
+        investigation['remediationActions'] = None
 
     return jsonify({
         'timestamp': datetime.now().isoformat(),
         'pods': get_pod_status(),
-        'alerts': get_prometheus_alerts(),
+        'alerts': alerts,
         'agentInvestigation': investigation,
         'pullRequests': get_github_prs(),
         'githubActions': get_github_actions()
