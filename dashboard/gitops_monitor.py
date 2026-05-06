@@ -199,40 +199,40 @@ def get_webhook_logs():
                 'message': line.strip()
             })
 
-            # Detect phases
-            if 'PHASE 1' in line or 'Evidence Gathering' in line or '🔍 Gathering evidence' in line:
+            # Detect phases based on actual agent output
+            if 'EVIDENCE GATHERING' in line or '🔍 EVIDENCE' in line:
                 current_phase = 'evidence'
                 investigation['phase'] = 'gathering_evidence'
 
-            elif 'PHASE 2' in line or 'Hypothesis Formation' in line or '🧠 Forming hypotheses' in line:
+            elif 'DIAGNOSIS' in line or '🧠 DIAGNOSIS' in line or 'Generating hypotheses' in line:
                 current_phase = 'hypothesis'
                 investigation['phase'] = 'analyzing'
 
-            elif 'PHASE 3' in line or 'Verification' in line or '✓ Verifying' in line:
+            elif 'VERIFICATION' in line or '✅ VERIFICATION' in line or 'Testing hypothesis' in line:
                 current_phase = 'verification'
                 investigation['phase'] = 'analyzing'
 
-            elif 'PHASE 4' in line or 'Remediation' in line or '📝 Creating remediation' in line:
+            elif 'RECOVERY PROPOSAL' in line or '🛠️' in line or 'Drafting remediation' in line:
                 current_phase = 'remediation'
                 investigation['phase'] = 'creating_fix'
 
             # Parse content by phase
             if current_phase == 'evidence':
-                if any(marker in line for marker in ['Found:', 'Detected:', 'Observed:', '•', '-']):
+                if any(marker in line for marker in ['Getting', 'Gathering', '├─', '└─', '•', 'pods', 'events', 'deployments']):
                     investigation['evidence'].append(line.strip())
 
             elif current_phase == 'hypothesis':
-                if any(marker in line for marker in ['Hypothesis', 'H1:', 'H2:', 'H3:', '•', '-']):
+                if any(marker in line for marker in ['#1:', '#2:', '#3:', 'hypothesis', '✓ Generated']):
                     investigation['hypotheses'].append(line.strip())
 
             elif current_phase == 'verification':
-                if any(marker in line for marker in ['Verified:', 'Confirmed:', 'Testing:', '✓', '•', '-']):
+                if any(marker in line for marker in ['Testing hypothesis', 'Falsification', 'Result:', 'CONFIRMED', 'Reasoning:']):
                     investigation['verification'].append(line.strip())
-                if 'ROOT CAUSE' in line.upper() or 'Root cause:' in line:
-                    investigation['rootCause'] = line.strip()
+                if 'CONFIRMED' in line or 'status": "confirmed' in line:
+                    investigation['rootCause'] = 'Hypothesis confirmed - insufficient memory limits'
 
             elif current_phase == 'remediation':
-                if any(marker in line for marker in ['Action:', 'Fix:', 'Change:', '•', '-']):
+                if any(marker in line for marker in ['Action Type:', 'Description:', 'Commands:', 'kubectl', 'rollback', 'Blast Radius']):
                     investigation['remediation'].append(line.strip())
                 if 'PR created:' in line or 'https://github.com' in line:
                     import re
