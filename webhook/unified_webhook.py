@@ -135,18 +135,24 @@ def trigger_agent(service: str, alert_type: str, alert: dict):
 
         print(f"   💾 Saved incident data to {incident_file}")
 
+        # Redirect agent output to log file so we can see investigation progress
+        agent_log_file = os.path.join(AGENT_REPO, "data", "agent_investigation.log")
+        agent_log = open(agent_log_file, 'w')
+
         # Run the agent in background
         print(f"   🚀 Starting agent investigation...")
+        print(f"   📝 Agent logs: {agent_log_file}")
         result = subprocess.Popen(
             ["python", "-m", "agent.graph"],
             cwd=AGENT_REPO,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=agent_log,
+            stderr=subprocess.STDOUT,  # Redirect stderr to stdout
             text=True
         )
 
         print(f"   ✓ Agent started (PID: {result.pid})")
         print(f"   📊 Agent will investigate and create PR if fix is identified")
+        print(f"   📋 Monitor progress: kubectl exec <pod> -- tail -f /app/data/agent_investigation.log")
 
     except Exception as e:
         print(f"   ❌ Error triggering agent: {e}")
