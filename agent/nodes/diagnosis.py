@@ -161,14 +161,25 @@ A previous remediation approach was rejected with this feedback:
 Take this feedback into account when generating new hypotheses. Avoid the rejected approach and consider alternative solutions suggested by the human operator.
 """
 
+    # Extract alert details
+    alert_data = incident.get('alert_data', {})
+    alert_labels = alert_data.get('labels', {})
+    alert_annotations = alert_data.get('annotations', {})
+
+    alert_name = alert_labels.get('alertname', 'Unknown')
+    alert_summary = alert_annotations.get('summary', '')
+    alert_description = alert_annotations.get('description', '')
+
     prompt = f"""Analyze this production incident and generate 2-3 ranked hypotheses about the root cause.
 {feedback_section}
 
 **Incident Details:**
+- Alert Name: {alert_name}
 - Service: {incident.get('service')}
 - Severity: {incident.get('severity')}
-- Description: {incident.get('description')}
-- Time: {incident.get('time_window_start')} to {incident.get('time_window_end')}
+- Alert Summary: {alert_summary}
+- Alert Description: {alert_description}
+- Triggered At: {incident.get('triggered_at')}
 
 **Evidence:**
 
@@ -191,9 +202,14 @@ Generate 2-3 hypotheses ranked by likelihood. For each:
 4. **Verification Checks**: Specific checks to run (e.g., "Check memory limits in deployment config")
 
 Focus on:
+- **CRITICALLY IMPORTANT**: Base your hypotheses on the ALERT NAME and ALERT SUMMARY above. Different alerts indicate different root causes.
+  - For OOMKilled alerts: Focus on memory limits, memory leaks
+  - For CrashLoop alerts: Focus on startup failures, config errors
+  - For AlertManager/notification failures: Focus on network issues, authentication, configuration
+  - For service down alerts: Focus on availability, health checks, dependencies
 - Correlation between deploy timing and incident
-- Anomalies in metrics/logs
-- Common failure patterns
+- Anomalies in metrics/logs specific to the alert type
+- Common failure patterns for this specific type of alert
 
 Return as JSON array of hypotheses."""
 

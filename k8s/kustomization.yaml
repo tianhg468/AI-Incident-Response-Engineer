@@ -4,3 +4,5 @@ resources:
   # Webhook resources
   - webhook-rbac.yaml
   - webhook-deployment.yaml
+  # Flux Kustomizations
+  - flux-demo-app.yaml

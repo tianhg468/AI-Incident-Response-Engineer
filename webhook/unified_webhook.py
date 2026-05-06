@@ -118,35 +118,72 @@ def process_alert(alert: dict):
 def trigger_agent(service: str, alert_type: str, alert: dict):
     """Trigger the AI agent to investigate an incident."""
     try:
+        # Generate unique investigation ID
+        import hashlib
+        incident_hash = hashlib.md5(f"{service}_{alert_type}_{datetime.now().isoformat()}".encode()).hexdigest()[:8]
+        investigation_id = f"{service}_{alert_type}_{incident_hash}"
+
         # Create incident file with alert data for the agent
         incident_data = {
+            "investigation_id": investigation_id,
             "service": service,
             "alert_type": alert_type,
             "severity": "critical",
             "triggered_at": datetime.now().isoformat(),
+            "status": "investigating",
             "alert_data": alert
         }
 
-        incident_file = os.path.join(AGENT_REPO, "data", "current_incident.json")
-        os.makedirs(os.path.dirname(incident_file), exist_ok=True)
+        data_dir = os.path.join(AGENT_REPO, "data")
+        os.makedirs(data_dir, exist_ok=True)
 
+        # Save individual incident file
+        incident_file = os.path.join(data_dir, f"incident_{investigation_id}.json")
         with open(incident_file, 'w') as f:
             json.dump(incident_data, f, indent=2)
 
-        print(f"   💾 Saved incident data to {incident_file}")
+        # Also save as current_incident.json for backward compatibility
+        current_incident_file = os.path.join(data_dir, "current_incident.json")
+        with open(current_incident_file, 'w') as f:
+            json.dump(incident_data, f, indent=2)
+
+        # Update investigations index
+        investigations_file = os.path.join(data_dir, "investigations.json")
+        investigations = {}
+        if os.path.exists(investigations_file):
+            with open(investigations_file, 'r') as f:
+                investigations = json.load(f)
+
+        investigations[investigation_id] = {
+            "triggered_at": incident_data["triggered_at"],
+            "service": service,
+            "alert_type": alert_type,
+            "status": "investigating"
+        }
+
+        with open(investigations_file, 'w') as f:
+            json.dump(investigations, f, indent=2)
+
+        print(f"   💾 Saved incident data: {investigation_id}")
+
+        # Redirect agent output to unique log file
+        agent_log_file = os.path.join(data_dir, f"investigation_{investigation_id}.log")
+        agent_log = open(agent_log_file, 'w')
 
         # Run the agent in background
         print(f"   🚀 Starting agent investigation...")
+        print(f"   📝 Agent logs: {agent_log_file}")
         result = subprocess.Popen(
             ["python", "-m", "agent.graph"],
             cwd=AGENT_REPO,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=agent_log,
+            stderr=subprocess.STDOUT,
             text=True
         )
 
         print(f"   ✓ Agent started (PID: {result.pid})")
-        print(f"   📊 Agent will investigate and create PR if fix is identified")
+        print(f"   📊 Investigation ID: {investigation_id}")
+        print(f"   📋 Monitor: kubectl exec <pod> -- tail -f /app/data/investigation_{investigation_id}.log")
 
     except Exception as e:
         print(f"   ❌ Error triggering agent: {e}")

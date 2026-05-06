@@ -9,6 +9,7 @@ from datetime import datetime
 import os
 
 from dashboard.checkpoint_reader import CheckpointReader
+from dashboard.cluster_reader import get_live_investigation
 
 # Page config
 st.set_page_config(
@@ -303,6 +304,110 @@ def render_investigation_detail():
                 st.markdown(f"**{event['status']}** - Verification Round: {event['verification_round']}")
 
 
+def render_live_investigation():
+    """Render live investigation from cluster."""
+    st.title("🔴 Live Investigation")
+    st.markdown("Real-time view of active agent investigation in the cluster")
+
+    # Add refresh button
+    if st.button("🔄 Refresh"):
+        st.rerun()
+
+    # Get live investigation data
+    live_data = get_live_investigation()
+
+    if not live_data:
+        st.info("No active investigation found in the cluster.")
+        st.markdown("""
+        **How to trigger an investigation:**
+        1. Deploy a crashing pod (e.g., with OOMKill)
+        2. Wait for Prometheus alert to fire
+        3. AlertManager will send to webhook
+        4. AI agent will investigate automatically
+        """)
+        return
+
+    incident = live_data['incident']
+    investigation = live_data['investigation']
+    log_text = live_data['log']
+
+    # Incident Summary
+    st.subheader("📋 Current Incident")
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("Alert", incident['alert_data']['labels'].get('alertname', 'Unknown'))
+
+    with col2:
+        st.metric("Severity", incident.get('severity', 'unknown').upper())
+
+    with col3:
+        st.metric("Phase", investigation.get('phase', 'idle').replace('_', ' ').title())
+
+    # Incident Details
+    with st.expander("Full Incident Details", expanded=False):
+        st.json(incident)
+
+    # Investigation Progress
+    st.subheader("🔍 Investigation Progress")
+
+    # Phase indicators
+    phases = [
+        ('gathering_evidence', '🔍 Evidence Gathering', investigation.get('evidence', [])),
+        ('analyzing', '🧠 Analysis', investigation.get('hypotheses', []) + investigation.get('verification', [])),
+        ('creating_fix', '📝 Remediation', investigation.get('remediation', [])),
+        ('completed', '✅ Complete', [investigation.get('prUrl')] if investigation.get('prUrl') else [])
+    ]
+
+    cols = st.columns(4)
+    current_phase = investigation.get('phase', 'idle')
+
+    for idx, (phase, label, items) in enumerate(phases):
+        with cols[idx]:
+            if current_phase == phase:
+                st.markdown(f"### {label} 🔵")
+                st.caption(f"{len(items)} items")
+            elif phases.index((phase, label, items)) < phases.index(next((p for p in phases if p[0] == current_phase), phases[0])):
+                st.markdown(f"### {label} ✅")
+                st.caption(f"{len(items)} items")
+            else:
+                st.markdown(f"### {label}")
+                st.caption("Pending")
+
+    # Detailed sections
+    if investigation.get('evidence'):
+        st.subheader("🔍 Evidence Gathered")
+        for item in investigation['evidence']:
+            st.markdown(f"- {item}")
+
+    if investigation.get('hypotheses'):
+        st.subheader("🧠 Hypotheses")
+        for item in investigation['hypotheses']:
+            st.markdown(f"- {item}")
+
+    if investigation.get('verification'):
+        st.subheader("✓ Verification")
+        for item in investigation['verification']:
+            st.markdown(f"- {item}")
+
+    if investigation.get('rootCause'):
+        st.success(f"**ROOT CAUSE IDENTIFIED:** {investigation['rootCause']}")
+
+    if investigation.get('remediation'):
+        st.subheader("📝 Remediation Plan")
+        for item in investigation['remediation']:
+            st.markdown(f"- {item}")
+
+    if investigation.get('prUrl'):
+        st.markdown(f"### 🔗 Pull Request")
+        st.markdown(f"[View PR on GitHub]({investigation['prUrl']})")
+
+    # Full log
+    if log_text:
+        with st.expander("📋 Full Investigation Log", expanded=False):
+            st.code(log_text, language='text')
+
+
 def main():
     """Main dashboard application."""
     # Sidebar navigation
@@ -310,13 +415,13 @@ def main():
 
     page = st.sidebar.radio(
         "Go to",
-        ["Overview", "Investigations"],
+        ["Live Investigation", "Overview", "Investigations"],
         key="nav"
     )
 
     # Update session state page
     if "page" not in st.session_state:
-        st.session_state.page = page.lower()
+        st.session_state.page = page.lower().replace(' ', '_')
 
     # Database info
     st.sidebar.markdown("---")
@@ -344,6 +449,8 @@ def main():
     # Render selected page
     if st.session_state.page == "investigation_detail":
         render_investigation_detail()
+    elif st.session_state.page == "live_investigation" or page == "Live Investigation":
+        render_live_investigation()
     elif st.session_state.page == "investigations" or page == "Investigations":
         render_investigations_list()
     else:
