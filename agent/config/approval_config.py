@@ -34,6 +34,12 @@ ALLOWED_ACTION_TYPES = {
         "risk_level": "medium",
         "requires_approval": True,
         "can_auto_approve_in_eval": True
+    },
+    "gitops_pr": {
+        "description": "Create GitHub PR with deployment changes (GitOps workflow)",
+        "risk_level": "low",
+        "requires_approval": True,
+        "can_auto_approve_in_eval": True
     }
 }
 

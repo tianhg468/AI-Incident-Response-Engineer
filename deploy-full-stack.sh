@@ -13,6 +13,22 @@ print_error() { echo -e "${RED}❌ $1${NC}"; }
 print_info() { echo -e "${BLUE}ℹ️  $1${NC}"; }
 print_warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
 
+# Load environment variables from .env if it exists
+if [ -f .env ]; then
+    print_info "Loading environment variables from .env file..."
+    while IFS='=' read -r key value; do
+        # Skip empty lines and comments
+        if [[ ! -z "$key" && ! "$key" =~ ^# ]]; then
+            # Remove inline comments and quotes
+            value=$(echo "$value" | sed 's/#.*//' | sed 's/^["'\'']//' | sed 's/["'\'']$//' | xargs)
+            export "$key=$value"
+        fi
+    done < .env
+    print_success "Loaded .env file"
+else
+    print_warning ".env file not found, using existing environment variables"
+fi
+
 echo "==========================================="
 echo "Full Stack AI Incident Response Deployment"
 echo "==========================================="
@@ -109,6 +125,31 @@ if [ -z "$GITHUB_TOKEN" ]; then
 fi
 print_success "GITHUB_TOKEN is set"
 
+# Check Slack tokens (optional but recommended)
+if [ -z "$SLACK_BOT_TOKEN" ] || [ -z "$SLACK_SIGNING_SECRET" ]; then
+    print_warning "Slack tokens not set (optional)"
+    echo ""
+    echo "Without Slack tokens, approval requests will fail and investigations will escalate."
+    echo "To enable Slack approvals:"
+    echo "  1. Create a Slack app at https://api.slack.com/apps"
+    echo "  2. Add scopes: chat:write, chat:write.public, channels:read"
+    echo "  3. Install app and copy the Bot User OAuth Token (xoxb-...)"
+    echo "  4. Enable Interactivity and set Request URL"
+    echo "  5. Copy Signing Secret from Basic Information"
+    echo ""
+    echo "Then set:"
+    echo "  export SLACK_BOT_TOKEN='xoxb-...'"
+    echo "  export SLACK_SIGNING_SECRET='...'"
+    echo ""
+    read -p "Continue without Slack? (y/n) " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        exit 0
+    fi
+else
+    print_success "SLACK_BOT_TOKEN and SLACK_SIGNING_SECRET are set"
+fi
+
 # Check if flux is installed
 if ! command -v flux &> /dev/null; then
     print_warning "Flux CLI not found!"
@@ -172,7 +213,9 @@ if ! kubectl get secret webhook-secrets &>/dev/null; then
     kubectl create secret generic webhook-secrets \
       --from-literal=anthropic-api-key="$ANTHROPIC_API_KEY" \
       --from-literal=github-token="$GITHUB_TOKEN" \
-      --from-literal=webhook-secret="$WEBHOOK_SECRET"
+      --from-literal=webhook-secret="$WEBHOOK_SECRET" \
+      --from-literal=slack-bot-token="${SLACK_BOT_TOKEN:-YOUR_SLACK_BOT_TOKEN}" \
+      --from-literal=slack-signing-secret="${SLACK_SIGNING_SECRET:-YOUR_SLACK_SIGNING_SECRET}"
     print_success "webhook-secrets created"
 fi
 

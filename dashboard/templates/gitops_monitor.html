@@ -346,6 +346,55 @@
             margin-bottom: 10px;
             color: #58a6ff;
         }
+
+        /* Investigation Tabs */
+        .investigation-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #30363d;
+            overflow-x: auto;
+        }
+
+        .investigation-tab {
+            padding: 10px 20px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-bottom: none;
+            border-radius: 6px 6px 0 0;
+            cursor: pointer;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+
+        .investigation-tab:hover {
+            background: #1f2937;
+        }
+
+        .investigation-tab.active {
+            background: #1f6feb;
+            color: white;
+            border-color: #1f6feb;
+        }
+
+        .investigation-tab .tab-title {
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+
+        .investigation-tab .tab-meta {
+            font-size: 0.75em;
+            opacity: 0.8;
+            margin-top: 2px;
+        }
+
+        .investigation-content {
+            display: none;
+        }
+
+        .investigation-content.active {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -357,50 +406,23 @@
         </div>
     </div>
 
-    <!-- AI Agent Investigation (Full Width) -->
+    <!-- AI Agent Investigations (Full Width) -->
     <div class="card full-width" id="agentCard">
         <div class="card-header">
             <div class="card-title">
-                🤖 AI Agent Investigation
+                🤖 AI Agent Investigations
                 <span class="badge" id="agentStatus">Idle</span>
             </div>
         </div>
 
-        <!-- Investigation Phases -->
-        <div class="agent-phases">
-            <div class="phase" id="phase1">
-                <div class="phase-icon">🔍</div>
-                <div class="phase-name">Evidence Gathering</div>
-                <div class="phase-status"></div>
-            </div>
-            <div class="phase" id="phase2">
-                <div class="phase-icon">🧠</div>
-                <div class="phase-name">Root Cause Analysis</div>
-                <div class="phase-status"></div>
-            </div>
-            <div class="phase" id="phase3">
-                <div class="phase-icon">📝</div>
-                <div class="phase-name">Creating Fix</div>
-                <div class="phase-status"></div>
-            </div>
-            <div class="phase" id="phase4">
-                <div class="phase-icon">✅</div>
-                <div class="phase-name">PR Created</div>
-                <div class="phase-status"></div>
-            </div>
+        <!-- Investigation Tabs -->
+        <div class="investigation-tabs" id="investigationTabs">
+            <!-- Tabs will be inserted here by JavaScript -->
         </div>
 
-        <!-- Investigation Details -->
-        <div id="investigationDetails">
-            <div class="empty-state">No active investigation. Waiting for incidents...</div>
-        </div>
-
-        <!-- Full Log Stream -->
-        <div style="margin-top: 20px;">
-            <div class="section-title">📋 Full Agent Logs</div>
-            <div class="log-stream" id="agentLogs">
-                <div class="empty-state">No logs yet...</div>
-            </div>
+        <!-- Investigation Content Container -->
+        <div id="investigationsContainer">
+            <div class="empty-state">No active investigations. Waiting for incidents...</div>
         </div>
     </div>
 
@@ -467,13 +489,15 @@
         let countdown = 5;
         let countdownInterval;
 
+        let currentTabIndex = 0;
+
         function updateStatus() {
             fetch('/api/status')
                 .then(response => response.json())
                 .then(data => {
                     updatePods(data.pods);
                     updateAlerts(data.alerts);
-                    updateAgentInvestigation(data.agentInvestigation);
+                    updateInvestigations(data.investigations || []);
                     updatePullRequests(data.pullRequests);
                     updateGithubActions(data.githubActions);
 
@@ -535,34 +559,130 @@
             `).join('');
         }
 
-        function updateAgentInvestigation(investigation) {
+        function updateInvestigations(investigations) {
+            const tabsContainer = document.getElementById('investigationTabs');
+            const contentContainer = document.getElementById('investigationsContainer');
             const agentCard = document.getElementById('agentCard');
             const statusBadge = document.getElementById('agentStatus');
-            const detailsContainer = document.getElementById('investigationDetails');
-            const logsContainer = document.getElementById('agentLogs');
 
-            // Update status badge
-            if (investigation.active) {
-                statusBadge.textContent = investigation.phase.replace('_', ' ').toUpperCase();
-                statusBadge.className = 'badge active';
-                agentCard.classList.add('agent-active');
-            } else if (investigation.phase === 'completed') {
-                statusBadge.textContent = 'COMPLETED';
-                statusBadge.className = 'badge success';
-                agentCard.classList.remove('agent-active');
-            } else {
+            if (!investigations || investigations.length === 0) {
+                // No investigations
+                tabsContainer.innerHTML = '';
+                contentContainer.innerHTML = '<div class="empty-state">No active investigations. System is healthy.</div>';
                 statusBadge.textContent = 'IDLE';
                 statusBadge.className = 'badge info';
                 agentCard.classList.remove('agent-active');
+                return;
             }
 
-            // Update phase indicators
-            updatePhaseIndicators(investigation.phase, investigation);
+            // Determine overall status
+            const hasActive = investigations.some(inv => inv.investigation?.active);
+            const hasCompleted = investigations.some(inv => inv.investigation?.phase === 'completed');
 
-            // Update investigation details
+            if (hasActive) {
+                statusBadge.textContent = `${investigations.length} ACTIVE`;
+                statusBadge.className = 'badge active';
+                agentCard.classList.add('agent-active');
+            } else if (hasCompleted) {
+                statusBadge.textContent = `${investigations.length} COMPLETED`;
+                statusBadge.className = 'badge success';
+                agentCard.classList.remove('agent-active');
+            } else {
+                statusBadge.textContent = `${investigations.length} INVESTIGATING`;
+                statusBadge.className = 'badge warning';
+                agentCard.classList.add('agent-active');
+            }
+
+            // Render tabs
+            tabsContainer.innerHTML = investigations.map((inv, index) => {
+                const incident = inv.incident || {};
+                const investigation = inv.investigation || {};
+                const alertName = incident.alert_data?.labels?.alertname || 'Unknown';
+                const service = incident.service || 'Unknown';
+                const phase = investigation.phase || 'investigating';
+
+                return `
+                    <div class="investigation-tab ${index === currentTabIndex ? 'active' : ''}"
+                         onclick="switchTab(${index})">
+                        <div class="tab-title">${service} - ${alertName}</div>
+                        <div class="tab-meta">${phase.replace('_', ' ')}</div>
+                    </div>
+                `;
+            }).join('');
+
+            // Render investigation contents
+            contentContainer.innerHTML = investigations.map((inv, index) => {
+                const investigation = inv.investigation || {};
+                const incident = inv.incident || {};
+
+                return `
+                    <div class="investigation-content ${index === currentTabIndex ? 'active' : ''}"
+                         id="investigation-${index}">
+                        ${renderSingleInvestigation(investigation, incident, index)}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function switchTab(index) {
+            currentTabIndex = index;
+
+            // Update tab active states
+            const tabs = document.querySelectorAll('.investigation-tab');
+            tabs.forEach((tab, i) => {
+                if (i === index) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+
+            // Update content active states
+            const contents = document.querySelectorAll('.investigation-content');
+            contents.forEach((content, i) => {
+                if (i === index) {
+                    content.classList.add('active');
+                } else {
+                    content.classList.remove('active');
+                }
+            });
+        }
+
+        function renderSingleInvestigation(investigation, incident, index) {
+            let html = '';
+
+            // Investigation Phases
+            html += '<div class="agent-phases">';
+            html += `<div class="phase ${investigation.phase === 'gathering_evidence' ? 'active' : (investigation.phase && investigation.phase !== 'idle' ? 'completed' : '')}" id="phase1-${index}">`;
+            html += '<div class="phase-icon">🔍</div>';
+            html += '<div class="phase-name">Evidence Gathering</div>';
+            html += `<div class="phase-status">${investigation.evidence?.length || 0} items</div>`;
+            html += '</div>';
+
+            html += `<div class="phase ${investigation.phase === 'analyzing' ? 'active' : (investigation.phase === 'creating_fix' || investigation.phase === 'completed' ? 'completed' : '')}" id="phase2-${index}">`;
+            html += '<div class="phase-icon">🧠</div>';
+            html += '<div class="phase-name">Root Cause Analysis</div>';
+            const analysisCount = (investigation.hypotheses?.length || 0) + (investigation.verification?.length || 0);
+            html += `<div class="phase-status">${analysisCount} items</div>`;
+            html += '</div>';
+
+            html += `<div class="phase ${investigation.phase === 'creating_fix' ? 'active' : (investigation.phase === 'completed' ? 'completed' : '')}" id="phase3-${index}">`;
+            html += '<div class="phase-icon">📝</div>';
+            html += '<div class="phase-name">Creating Fix</div>';
+            html += `<div class="phase-status">${investigation.remediation?.length || 0} actions</div>`;
+            html += '</div>';
+
+            html += `<div class="phase ${investigation.phase === 'completed' || investigation.prUrl ? 'completed' : ''}" id="phase4-${index}">`;
+            html += '<div class="phase-icon">✅</div>';
+            html += '<div class="phase-name">PR Created</div>';
+            html += `<div class="phase-status">${investigation.prUrl ? 'Created' : ''}</div>`;
+            html += '</div>';
+            html += '</div>';
+
+            // Investigation details
             let detailsHTML = '';
 
-            if (investigation.evidence.length > 0) {
+            if (investigation.evidence && investigation.evidence.length > 0) {
                 detailsHTML += '<div class="section-title">🔍 Evidence Gathered</div>';
                 detailsHTML += '<div class="evidence-list">';
                 investigation.evidence.forEach(item => {
@@ -571,7 +691,7 @@
                 detailsHTML += '</div>';
             }
 
-            if (investigation.hypotheses.length > 0) {
+            if (investigation.hypotheses && investigation.hypotheses.length > 0) {
                 detailsHTML += '<div class="section-title" style="margin-top:20px">🧠 Hypotheses</div>';
                 detailsHTML += '<div class="hypothesis-list">';
                 investigation.hypotheses.forEach(item => {
@@ -607,202 +727,43 @@
                 detailsHTML += `<a href="${investigation.prUrl}" target="_blank" class="pr-link">🔗 View Pull Request on GitHub</a>`;
             }
 
-            // Display incident data ONLY if currently available (no caching)
-            if (investigation.incidentData) {
-                const incident = investigation.incidentData;
-                detailsHTML += `<div class="section-title">🚨 Current Incident</div>`;
+            // Display incident data
+            if (incident && incident.alert_data) {
+                detailsHTML += `<div class="section-title" style="margin-top:20px">🚨 Incident Details</div>`;
                 detailsHTML += '<div class="incident-details">';
-                detailsHTML += `<div><strong>Alert Name:</strong> ${incident.alert_data.labels.alertname}</div>`;
-                detailsHTML += `<div><strong>Pod:</strong> ${incident.alert_data.labels.pod}</div>`;
-                detailsHTML += `<div><strong>Namespace:</strong> ${incident.alert_data.labels.namespace}</div>`;
-                detailsHTML += `<div><strong>Container:</strong> ${incident.alert_data.labels.container || 'N/A'}</div>`;
-                detailsHTML += `<div><strong>Type:</strong> ${incident.alert_type}</div>`;
-                detailsHTML += `<div><strong>Severity:</strong> <span class="badge error">${incident.severity}</span></div>`;
-                detailsHTML += `<div><strong>Summary:</strong> ${incident.alert_data.annotations.summary || 'N/A'}</div>`;
-                detailsHTML += `<div><strong>Description:</strong> ${incident.alert_data.annotations.description || 'N/A'}</div>`;
-                detailsHTML += `<div><strong>Started At:</strong> ${new Date(incident.triggered_at).toLocaleString()}</div>`;
-
-                // Calculate elapsed time
-                const startTime = new Date(incident.triggered_at);
-                const elapsed = Math.floor((new Date() - startTime) / 1000);
-                const minutes = Math.floor(elapsed / 60);
-                const seconds = elapsed % 60;
-                detailsHTML += `<div><strong>Duration:</strong> ${minutes}m ${seconds}s</div>`;
-
-                // Show status
+                detailsHTML += `<div><strong>Alert Name:</strong> ${incident.alert_data.labels?.alertname || 'Unknown'}</div>`;
+                detailsHTML += `<div><strong>Pod:</strong> ${incident.alert_data.labels?.pod || 'Unknown'}</div>`;
+                detailsHTML += `<div><strong>Namespace:</strong> ${incident.alert_data.labels?.namespace || 'default'}</div>`;
+                detailsHTML += `<div><strong>Container:</strong> ${incident.alert_data.labels?.container || 'N/A'}</div>`;
+                detailsHTML += `<div><strong>Type:</strong> ${incident.alert_type || 'Unknown'}</div>`;
+                detailsHTML += `<div><strong>Severity:</strong> <span class="badge error">${incident.severity || 'unknown'}</span></div>`;
+                detailsHTML += `<div><strong>Summary:</strong> ${incident.alert_data.annotations?.summary || 'N/A'}</div>`;
+                detailsHTML += `<div><strong>Started At:</strong> ${incident.triggered_at ? new Date(incident.triggered_at).toLocaleString() : 'Unknown'}</div>`;
                 detailsHTML += `<div><strong>Status:</strong> <span class="badge ${incident.status === 'investigating' ? 'warning' : 'info'}">${incident.status || 'investigating'}</span></div>`;
                 detailsHTML += '</div>';
-
-                // Show investigation progress indicator with more details
-                detailsHTML += '<div style="margin-top:20px;padding:15px;background:rgba(31,111,235,0.1);border:2px solid #1f6feb;border-radius:6px;">';
-                detailsHTML += '<div class="section-title">🔍 Investigation Progress</div>';
-                detailsHTML += `<div style="margin-top:10px">`;
-
-                if (investigation.phase === 'gathering_evidence') {
-                    detailsHTML += '<div style="margin-bottom:10px">⏳ <strong>Phase: Gathering Evidence</strong></div>';
-                    detailsHTML += '<div style="font-size:0.9em;color:#8b949e">The AI agent is currently:</div>';
-                    detailsHTML += '<ul style="margin-left:20px;margin-top:5px;font-size:0.9em">';
-                    detailsHTML += '<li>Analyzing pod status and container states</li>';
-                    detailsHTML += '<li>Reviewing recent logs for error patterns</li>';
-                    detailsHTML += '<li>Examining resource usage metrics</li>';
-                    detailsHTML += '<li>Checking deployment configurations</li>';
-                    detailsHTML += '</ul>';
-                } else if (investigation.phase === 'analyzing') {
-                    detailsHTML += '<div style="margin-bottom:10px">🧠 <strong>Phase: Root Cause Analysis</strong></div>';
-                    detailsHTML += '<div style="font-size:0.9em;color:#8b949e">The AI agent is currently:</div>';
-                    detailsHTML += '<ul style="margin-left:20px;margin-top:5px;font-size:0.9em">';
-                    detailsHTML += '<li>Generating hypotheses based on evidence</li>';
-                    detailsHTML += '<li>Correlating symptoms with known patterns</li>';
-                    detailsHTML += '<li>Verifying root cause theories</li>';
-                    detailsHTML += '<li>Determining impact scope</li>';
-                    detailsHTML += '</ul>';
-                } else if (investigation.phase === 'creating_fix') {
-                    detailsHTML += '<div style="margin-bottom:10px">📝 <strong>Phase: Creating Remediation</strong></div>';
-                    detailsHTML += '<div style="font-size:0.9em;color:#8b949e">The AI agent is currently:</div>';
-                    detailsHTML += '<ul style="margin-left:20px;margin-top:5px;font-size:0.9em">';
-                    detailsHTML += '<li>Designing the fix strategy</li>';
-                    detailsHTML += '<li>Preparing configuration changes</li>';
-                    detailsHTML += '<li>Testing remediation steps</li>';
-                    detailsHTML += '<li>Generating deployment commands</li>';
-                    detailsHTML += '</ul>';
-                } else if (investigation.phase === 'completed') {
-                    detailsHTML += '<div style="margin-bottom:10px">✅ <strong>Phase: Investigation Complete</strong></div>';
-                    detailsHTML += '<div style="font-size:0.9em;color:#3fb950">Remediation is ready for review and deployment.</div>';
-                } else {
-                    detailsHTML += '<div style="margin-bottom:10px">🤖 <strong>Phase: Investigating</strong></div>';
-                    detailsHTML += '<div style="font-size:0.9em;color:#8b949e">AI agent analysis in progress...</div>';
-                }
-
-                detailsHTML += '</div></div>';
             }
 
-            // Display remediation actions ONLY if currently available (no caching)
-            if (investigation.remediationActions && investigation.remediationActions.length > 0) {
-                detailsHTML += `<div class="section-title" style="margin-top:20px">💊 Proposed Remediation</div>`;
-                investigation.remediationActions.slice(0, 1).forEach(action => {
-                    const desc = action.description || '';
-                    // Parse the description to extract root cause
-                    const lines = desc.split('\n');
-                    let rootCause = '';
-                    let commands = '';
-                    let verification = '';
-                    let inCommands = false;
-
-                    lines.forEach(line => {
-                        if (line.includes('Remediation for:')) {
-                            rootCause = line.replace('**Description:**', '').replace('Remediation for:', '').trim();
-                        }
-                        if (line.includes('Verification:') || line.includes('verification')) {
-                            verification = line.replace('**Verification:**', '').trim();
-                        }
-                        if (line.includes('```')) {
-                            inCommands = !inCommands;
-                        } else if (inCommands && line.trim()) {
-                            commands += line + '\n';
-                        }
-                    });
-
-                    // Display in detailed format
-                    detailsHTML += '<div style="background:rgba(63,185,80,0.05);border:2px solid #3fb950;border-radius:6px;padding:15px;margin-top:10px">';
-
-                    if (rootCause) {
-                        detailsHTML += `<div style="margin-bottom:15px"><strong>🎯 Root Cause Identified:</strong><br/><div style="margin-top:5px;padding:10px;background:rgba(63,185,80,0.1);border-radius:4px">${rootCause}</div></div>`;
-                    }
-
-                    if (commands) {
-                        detailsHTML += '<div style="margin-bottom:15px"><strong>📝 Remediation Command:</strong>';
-                        detailsHTML += `<pre style="background:#1a1f2e;padding:12px;border-radius:5px;overflow-x:auto;margin-top:8px;border:1px solid #30363d"><code>${commands.trim()}</code></pre>`;
-                        detailsHTML += '</div>';
-                    }
-
-                    if (verification) {
-                        detailsHTML += `<div style="margin-bottom:15px"><strong>✅ Verification:</strong><br/><div style="margin-top:5px;padding:10px;background:rgba(31,111,235,0.1);border-radius:4px">${verification}</div></div>`;
-                    }
-
-                    // Action metadata
-                    detailsHTML += `<div style="margin-top:15px;padding-top:15px;border-top:1px solid #30363d">`;
-                    detailsHTML += `<div style="margin-bottom:8px"><strong>Status:</strong> <span class="badge ${action.status === 'pending' ? 'warning' : action.status === 'approved' ? 'success' : 'info'}">${action.status.toUpperCase()}</span></div>`;
-                    detailsHTML += `<div style="margin-bottom:8px"><strong>Action Type:</strong> ${action.action_type || 'remediation'}</div>`;
-                    if (action.created_at) {
-                        detailsHTML += `<div><strong>Created:</strong> ${new Date(action.created_at * 1000).toLocaleString()}</div>`;
-                    }
-                    detailsHTML += `</div>`;
-
-                    detailsHTML += '</div>';
-                });
-            }
-
-            // Show empty state ONLY when no data is available at all
-            if (detailsHTML) {
-                detailsContainer.innerHTML = detailsHTML;
-            } else {
-                detailsContainer.innerHTML = '<div class="empty-state">No active incidents. System is healthy.</div>';
-            }
-
-            // Update full logs
-            if (investigation.allLogs.length > 0) {
-                logsContainer.innerHTML = investigation.allLogs.slice(-100).map(log => {
+            // Full logs
+            if (investigation.allLogs && investigation.allLogs.length > 0) {
+                detailsHTML += '<div style="margin-top: 20px;">';
+                detailsHTML += '<div class="section-title">📋 Full Agent Logs</div>';
+                detailsHTML += '<div class="log-stream">';
+                investigation.allLogs.slice(-100).forEach(log => {
                     let className = 'log-line';
                     if (log.message.includes('🚨') || log.message.includes('🤖')) className += ' highlight';
                     if (log.message.includes('Error') || log.message.includes('❌')) className += ' error';
                     if (log.message.includes('✓') || log.message.includes('✅')) className += ' success';
-                    return `<div class="${className}">${log.message}</div>`;
-                }).join('');
-
-                // Auto-scroll to bottom
-                logsContainer.scrollTop = logsContainer.scrollHeight;
+                    detailsHTML += `<div class="${className}">${log.message}</div>`;
+                });
+                detailsHTML += '</div>';
+                detailsHTML += '</div>';
             }
+
+            html += detailsHTML || '<div class="empty-state">Investigation in progress...</div>';
+
+            return html;
         }
 
-        function updatePhaseIndicators(currentPhase, investigation) {
-            // Reset all phases
-            for (let i = 1; i <= 4; i++) {
-                const phase = document.getElementById(`phase${i}`);
-                phase.classList.remove('active', 'completed');
-                phase.querySelector('.phase-status').textContent = '';
-            }
-
-            // Phase 1: Evidence Gathering
-            if (currentPhase === 'gathering_evidence') {
-                document.getElementById('phase1').classList.add('active');
-                document.getElementById('phase1').querySelector('.phase-status').textContent =
-                    investigation.evidence ? `${investigation.evidence.length} items` : '';
-            } else if (currentPhase === 'analyzing' || currentPhase === 'creating_fix' || currentPhase === 'completed') {
-                document.getElementById('phase1').classList.add('completed');
-                document.getElementById('phase1').querySelector('.phase-status').textContent =
-                    investigation.evidence ? `${investigation.evidence.length} items` : 'Done';
-            }
-
-            // Phase 2: Root Cause Analysis
-            if (currentPhase === 'analyzing') {
-                document.getElementById('phase2').classList.add('active');
-                const count = (investigation.hypotheses ? investigation.hypotheses.length : 0) +
-                             (investigation.verification ? investigation.verification.length : 0);
-                document.getElementById('phase2').querySelector('.phase-status').textContent =
-                    count > 0 ? `${count} items` : '';
-            } else if (currentPhase === 'creating_fix' || currentPhase === 'completed') {
-                document.getElementById('phase2').classList.add('completed');
-                document.getElementById('phase2').querySelector('.phase-status').textContent =
-                    investigation.rootCause ? 'Found' : 'Done';
-            }
-
-            // Phase 3: Creating Fix
-            if (currentPhase === 'creating_fix') {
-                document.getElementById('phase3').classList.add('active');
-                document.getElementById('phase3').querySelector('.phase-status').textContent =
-                    investigation.remediation ? `${investigation.remediation.length} actions` : '';
-            } else if (currentPhase === 'completed') {
-                document.getElementById('phase3').classList.add('completed');
-                document.getElementById('phase3').querySelector('.phase-status').textContent = 'Done';
-            }
-
-            // Phase 4: PR Created
-            if (currentPhase === 'completed' || investigation.prUrl) {
-                document.getElementById('phase4').classList.add('completed');
-                document.getElementById('phase4').querySelector('.phase-status').textContent =
-                    investigation.prUrl ? 'Created' : 'Done';
-            }
-        }
 
         function updatePullRequests(prs) {
             const container = document.getElementById('pullRequests');

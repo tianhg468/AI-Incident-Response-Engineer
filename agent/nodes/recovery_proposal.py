@@ -72,13 +72,36 @@ def recovery_proposal_node(state: AgentState) -> AgentState:
                     target_revision = deploy.get("revision")
                     print(f"   Found good revision to rollback to: {target_revision} (memory: {memory_limit})")
 
-    if target_revision:
-        commands = [f"kubectl rollout undo deployment/{service} --to-revision={target_revision} -n default"]
-        expected_effect = f"Rollback to revision {target_revision} with higher memory limits"
+    # Check if running in GitOps mode
+    execution_mode = os.getenv("EXECUTION_MODE", "direct")
+
+    if execution_mode == "gitops":
+        # GitOps mode: Create PR instead of kubectl commands
+        print("   🔀 GitOps mode: Will create PR to update deployment manifest")
+
+        # Determine target memory limit from good revision
+        target_memory = "256Mi"  # Default
+        if target_revision and recent_deploys:
+            for deploy in recent_deploys:
+                if deploy.get("revision") == target_revision:
+                    resources = deploy.get("resources", [])
+                    if resources:
+                        target_memory = resources[0].get("limits", {}).get("memory", "256Mi")
+                        break
+
+        action_type = "gitops_pr"
+        commands = [f"Create PR to update deployment/{service} memory limit to {target_memory}"]
+        expected_effect = f"PR will update memory limits to {target_memory}, Flux CD will auto-sync to cluster"
+        blast_radius = f"Low - GitOps with gradual rollout, affects {service} pods"
     else:
-        # Fallback to generic undo
-        commands = [f"kubectl rollout undo deployment/{service} -n default"]
-        print("   WARNING: Could not identify specific good revision, using generic rollback")
+        # Direct mode: Use kubectl commands
+        if target_revision:
+            commands = [f"kubectl rollout undo deployment/{service} --to-revision={target_revision} -n default"]
+            expected_effect = f"Rollback to revision {target_revision} with higher memory limits"
+        else:
+            # Fallback to generic undo
+            commands = [f"kubectl rollout undo deployment/{service} -n default"]
+            print("   WARNING: Could not identify specific good revision, using generic rollback")
 
     # Request approval via ApprovalHandler
     approval_handler = ApprovalHandler()

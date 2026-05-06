@@ -145,33 +145,48 @@ def get_approvals_data():
     return []
 
 
-def get_agent_investigation_log():
-    """Get agent investigation log from webhook pod."""
+def get_all_investigations():
+    """Get all active investigations from webhook pod."""
     try:
         # Get webhook pod name
         pod_output = run_kubectl("get pod -l app=agent-webhook -o jsonpath='{.items[0].metadata.name}'")
         pod_name = pod_output.strip().strip("'")
 
         if not pod_name or 'Error' in pod_name:
-            return None
+            return []
 
-        # Read agent investigation log
-        log_output = run_kubectl(f"exec {pod_name} -- cat /app/data/agent_investigation.log 2>/dev/null")
+        # Read investigations index
+        investigations_output = run_kubectl(f"exec {pod_name} -- cat /app/data/investigations.json 2>/dev/null")
 
-        if log_output and 'Error' not in log_output and 'No such file' not in log_output:
-            return log_output
+        if investigations_output and 'Error' not in investigations_output and 'No such file' not in investigations_output:
+            investigations_index = json.loads(investigations_output)
+
+            # Get details for each investigation
+            all_investigations = []
+            for inv_id, inv_meta in investigations_index.items():
+                # Read investigation log
+                log_output = run_kubectl(f"exec {pod_name} -- cat /app/data/investigation_{inv_id}.log 2>/dev/null")
+
+                # Read incident data
+                incident_output = run_kubectl(f"exec {pod_name} -- cat /app/data/incident_{inv_id}.json 2>/dev/null")
+                incident_data = json.loads(incident_output) if incident_output and 'Error' not in incident_output else None
+
+                all_investigations.append({
+                    'id': inv_id,
+                    'meta': inv_meta,
+                    'incident': incident_data,
+                    'log': log_output if log_output and len(log_output.strip()) > 0 else None
+                })
+
+            return all_investigations
     except:
         pass
 
-    return None
+    return []
 
 
-def get_webhook_logs():
-    """Get recent webhook logs and parse agent investigation."""
-    # Get agent investigation log
-    agent_log = get_agent_investigation_log()
-
-    # Parse for agent investigation details
+def parse_investigation_log(agent_log):
+    """Parse agent investigation log into structured data."""
     investigation = {
         'active': False,
         'phase': 'idle',
@@ -184,67 +199,90 @@ def get_webhook_logs():
         'allLogs': []
     }
 
-    if agent_log:
-        lines = agent_log.split('\n')
-        investigation['active'] = True
-        current_phase = None
+    if not agent_log:
+        return investigation
 
-        for line in lines:
-            if not line.strip():
-                continue
+    investigation['active'] = True
+    lines = agent_log.split('\n')
+    current_phase = None
 
-            # Store all logs
-            investigation['allLogs'].append({
-                'timestamp': datetime.now().isoformat(),
-                'message': line.strip()
-            })
+    for line in lines:
+        if not line.strip():
+            continue
 
-            # Detect phases based on actual agent output
-            if 'EVIDENCE GATHERING' in line or '🔍 EVIDENCE' in line:
-                current_phase = 'evidence'
-                investigation['phase'] = 'gathering_evidence'
+        # Store all logs
+        investigation['allLogs'].append({
+            'timestamp': datetime.now().isoformat(),
+            'message': line.strip()
+        })
 
-            elif 'DIAGNOSIS' in line or '🧠 DIAGNOSIS' in line or 'Generating hypotheses' in line:
-                current_phase = 'hypothesis'
-                investigation['phase'] = 'analyzing'
+        # Detect phases based on actual agent output
+        if 'EVIDENCE GATHERING' in line or '🔍 EVIDENCE' in line:
+            current_phase = 'evidence'
+            investigation['phase'] = 'gathering_evidence'
 
-            elif 'VERIFICATION' in line or '✅ VERIFICATION' in line or 'Testing hypothesis' in line:
-                current_phase = 'verification'
-                investigation['phase'] = 'analyzing'
+        elif 'DIAGNOSIS' in line or '🧠 DIAGNOSIS' in line or 'Generating hypotheses' in line:
+            current_phase = 'hypothesis'
+            investigation['phase'] = 'analyzing'
 
-            elif 'RECOVERY PROPOSAL' in line or '🛠️' in line or 'Drafting remediation' in line:
-                current_phase = 'remediation'
-                investigation['phase'] = 'creating_fix'
+        elif 'VERIFICATION' in line or '✅ VERIFICATION' in line or 'Testing hypothesis' in line:
+            current_phase = 'verification'
+            investigation['phase'] = 'analyzing'
 
-            # Parse content by phase
-            if current_phase == 'evidence':
-                if any(marker in line for marker in ['Getting', 'Gathering', '├─', '└─', '•', 'pods', 'events', 'deployments']):
-                    investigation['evidence'].append(line.strip())
+        elif 'RECOVERY PROPOSAL' in line or '🛠️' in line or 'Drafting remediation' in line:
+            current_phase = 'remediation'
+            investigation['phase'] = 'creating_fix'
 
-            elif current_phase == 'hypothesis':
-                if any(marker in line for marker in ['#1:', '#2:', '#3:', 'hypothesis', '✓ Generated']):
-                    investigation['hypotheses'].append(line.strip())
+        # Parse content by phase
+        if current_phase == 'evidence':
+            if any(marker in line for marker in ['Getting', 'Gathering', '├─', '└─', '•', 'pods', 'events', 'deployments']):
+                investigation['evidence'].append(line.strip())
 
-            elif current_phase == 'verification':
-                if any(marker in line for marker in ['Testing hypothesis', 'Falsification', 'Result:', 'CONFIRMED', 'Reasoning:']):
-                    investigation['verification'].append(line.strip())
-                if 'CONFIRMED' in line or 'status": "confirmed' in line:
-                    investigation['rootCause'] = 'Hypothesis confirmed - insufficient memory limits'
+        elif current_phase == 'hypothesis':
+            if any(marker in line for marker in ['#1:', '#2:', '#3:', 'hypothesis', '✓ Generated']):
+                investigation['hypotheses'].append(line.strip())
 
-            elif current_phase == 'remediation':
-                if any(marker in line for marker in ['Action Type:', 'Description:', 'Commands:', 'kubectl', 'rollback', 'Blast Radius']):
-                    investigation['remediation'].append(line.strip())
-                if 'PR created:' in line or 'https://github.com' in line:
-                    import re
-                    url_match = re.search(r'https://github\.com[^\s]+', line)
-                    if url_match:
-                        investigation['prUrl'] = url_match.group(0)
+        elif current_phase == 'verification':
+            if any(marker in line for marker in ['Testing hypothesis', 'Falsification', 'Result:', 'CONFIRMED', 'Reasoning:']):
+                investigation['verification'].append(line.strip())
+            if 'CONFIRMED' in line or 'status": "confirmed' in line:
+                investigation['rootCause'] = 'Hypothesis confirmed - insufficient memory limits'
 
-            # Detect completion
-            if 'Investigation complete' in line or 'COMPLETED' in line or '🎉' in line:
-                investigation['phase'] = 'completed'
+        elif current_phase == 'remediation':
+            if any(marker in line for marker in ['Action Type:', 'Description:', 'Commands:', 'kubectl', 'rollback', 'Blast Radius']):
+                investigation['remediation'].append(line.strip())
+            if 'PR created:' in line or 'https://github.com' in line:
+                import re
+                url_match = re.search(r'https://github\.com[^\s]+', line)
+                if url_match:
+                    investigation['prUrl'] = url_match.group(0)
+
+        # Detect completion
+        if 'Investigation complete' in line or 'COMPLETED' in line or '🎉' in line:
+            investigation['phase'] = 'completed'
 
     return investigation
+
+
+def get_webhook_logs():
+    """Get all investigations from webhook pod."""
+    all_investigations = get_all_investigations()
+
+    # If we have investigations from the new system, return them
+    if all_investigations:
+        investigations_list = []
+        for inv in all_investigations:
+            parsed_investigation = parse_investigation_log(inv.get('log', ''))
+            investigations_list.append({
+                'id': inv['id'],
+                'meta': inv['meta'],
+                'incident': inv['incident'],
+                'investigation': parsed_investigation
+            })
+        return investigations_list
+
+    # Fallback: no investigations found
+    return []
 
 
 def get_github_prs():
@@ -318,61 +356,49 @@ def index():
 @app.route('/api/status')
 def status():
     """Get current status of all components."""
-    investigation = get_webhook_logs()
-    incident_data = get_incident_data()
+    investigations_list = get_webhook_logs()
     approvals = get_approvals_data()
     alerts = get_prometheus_alerts()
 
-    # Optionally validate incident against Prometheus alerts (only if Prometheus is accessible)
-    if incident_data and alerts and len(alerts) > 0:
-        # Prometheus is accessible - validate that incident still has active alert
-        incident_alertname = incident_data.get('alert_data', {}).get('labels', {}).get('alertname')
-        has_matching_alert = any(
-            alert.get('name') == incident_alertname
-            for alert in alerts
-        )
+    # Process each investigation
+    for inv_data in investigations_list:
+        incident = inv_data.get('incident')
+        investigation = inv_data.get('investigation', {})
 
-        if not has_matching_alert:
-            # Alert has resolved - clear the incident
-            incident_data = None
+        # Validate incident against Prometheus alerts (only if Prometheus is accessible)
+        if incident and alerts and len(alerts) > 0:
+            incident_alertname = incident.get('alert_data', {}).get('labels', {}).get('alertname')
+            has_matching_alert = any(
+                alert.get('name') == incident_alertname
+                for alert in alerts
+            )
 
-    # Merge incident data into investigation
-    if incident_data:
-        investigation['incidentData'] = incident_data
-        investigation['active'] = True
+            if not has_matching_alert:
+                # Alert has resolved - mark investigation as resolved
+                investigation['resolved'] = True
+                investigation['active'] = False
+            else:
+                investigation['active'] = True
+        elif incident:
+            investigation['active'] = True
 
-        # Determine phase based on available data
-        if approvals and approvals[0].get('status') == 'pending':
-            # Has pending approvals = reached remediation phase
-            investigation['phase'] = 'creating_fix'
-            investigation['remediationActions'] = approvals
-        elif not investigation['phase'] or investigation['phase'] == 'idle':
-            # Calculate time since investigation started
-            triggered_at = incident_data.get('triggered_at')
-            if triggered_at:
-                from datetime import datetime as dt
-                start_time = dt.fromisoformat(triggered_at.replace('Z', '+00:00'))
-                elapsed = (dt.now(start_time.tzinfo) - start_time).total_seconds()
+        # Add remediation actions if pending
+        if approvals:
+            for approval in approvals:
+                # Match approval to investigation by checking incident ID or service
+                if approval.get('investigation_id') == inv_data['id']:
+                    investigation['remediationActions'] = [approval]
+                    if approval.get('status') == 'pending':
+                        investigation['phase'] = 'creating_fix'
 
-                # Estimate phase based on elapsed time
-                if elapsed < 30:
-                    investigation['phase'] = 'gathering_evidence'
-                elif elapsed < 60:
-                    investigation['phase'] = 'analyzing'
-                else:
-                    investigation['phase'] = 'creating_fix'
-    else:
-        # No valid incident - clear investigation state
-        investigation['active'] = False
-        investigation['phase'] = 'idle'
-        investigation['incidentData'] = None
-        investigation['remediationActions'] = None
+        # Store processed investigation back
+        inv_data['investigation'] = investigation
 
     return jsonify({
         'timestamp': datetime.now().isoformat(),
         'pods': get_pod_status(),
         'alerts': alerts,
-        'agentInvestigation': investigation,
+        'investigations': investigations_list,  # Changed from single agentInvestigation to multiple
         'pullRequests': get_github_prs(),
         'githubActions': get_github_actions()
     })
