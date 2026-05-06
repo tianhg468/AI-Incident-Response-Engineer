@@ -557,7 +557,7 @@
             }
 
             // Update phase indicators
-            updatePhaseIndicators(investigation.phase);
+            updatePhaseIndicators(investigation.phase, investigation);
 
             // Update investigation details
             let detailsHTML = '';
@@ -575,21 +575,30 @@
                 detailsHTML += '<div class="section-title" style="margin-top:20px">🧠 Hypotheses</div>';
                 detailsHTML += '<div class="hypothesis-list">';
                 investigation.hypotheses.forEach(item => {
-                    const isConfirmed = item.includes('CONFIRMED');
+                    const isConfirmed = item.includes('CONFIRMED') || item.includes('✓');
                     detailsHTML += `<div class="hypothesis-item ${isConfirmed ? 'confirmed' : ''}">${item}</div>`;
                 });
                 detailsHTML += '</div>';
             }
 
-            if (investigation.rootCause) {
-                detailsHTML += `<div class="root-cause">✅ ${investigation.rootCause}</div>`;
+            if (investigation.verification && investigation.verification.length > 0) {
+                detailsHTML += '<div class="section-title" style="margin-top:20px">✓ Verification</div>';
+                detailsHTML += '<div class="evidence-list">';
+                investigation.verification.forEach(item => {
+                    detailsHTML += `<div class="evidence-item">${item}</div>`;
+                });
+                detailsHTML += '</div>';
             }
 
-            if (investigation.fix && investigation.fix.length > 0) {
-                detailsHTML += '<div class="fix-details">';
-                detailsHTML += '<div class="section-title">📝 Proposed Fix</div>';
-                investigation.fix.forEach(item => {
-                    detailsHTML += `<div>${item}</div>`;
+            if (investigation.rootCause) {
+                detailsHTML += `<div class="root-cause">✅ ROOT CAUSE IDENTIFIED: ${investigation.rootCause}</div>`;
+            }
+
+            if (investigation.remediation && investigation.remediation.length > 0) {
+                detailsHTML += '<div class="fix-details" style="margin-top:20px">';
+                detailsHTML += '<div class="section-title">📝 Remediation Plan</div>';
+                investigation.remediation.forEach(item => {
+                    detailsHTML += `<div style="padding:8px 0">${item}</div>`;
                 });
                 detailsHTML += '</div>';
             }
@@ -745,34 +754,53 @@
             }
         }
 
-        function updatePhaseIndicators(currentPhase) {
-            const phases = ['idle', 'investigating', 'gathering_evidence', 'analyzing', 'creating_fix', 'completed'];
-            const phaseIndex = phases.indexOf(currentPhase);
-
+        function updatePhaseIndicators(currentPhase, investigation) {
             // Reset all phases
             for (let i = 1; i <= 4; i++) {
                 const phase = document.getElementById(`phase${i}`);
                 phase.classList.remove('active', 'completed');
+                phase.querySelector('.phase-status').textContent = '';
             }
 
-            // Update based on current phase
-            if (phaseIndex >= 2) { // gathering_evidence
+            // Phase 1: Evidence Gathering
+            if (currentPhase === 'gathering_evidence') {
                 document.getElementById('phase1').classList.add('active');
-            }
-            if (phaseIndex >= 3) { // analyzing
-                document.getElementById('phase1').classList.remove('active');
+                document.getElementById('phase1').querySelector('.phase-status').textContent =
+                    investigation.evidence ? `${investigation.evidence.length} items` : '';
+            } else if (currentPhase === 'analyzing' || currentPhase === 'creating_fix' || currentPhase === 'completed') {
                 document.getElementById('phase1').classList.add('completed');
+                document.getElementById('phase1').querySelector('.phase-status').textContent =
+                    investigation.evidence ? `${investigation.evidence.length} items` : 'Done';
+            }
+
+            // Phase 2: Root Cause Analysis
+            if (currentPhase === 'analyzing') {
                 document.getElementById('phase2').classList.add('active');
-            }
-            if (phaseIndex >= 4) { // creating_fix
-                document.getElementById('phase2').classList.remove('active');
+                const count = (investigation.hypotheses ? investigation.hypotheses.length : 0) +
+                             (investigation.verification ? investigation.verification.length : 0);
+                document.getElementById('phase2').querySelector('.phase-status').textContent =
+                    count > 0 ? `${count} items` : '';
+            } else if (currentPhase === 'creating_fix' || currentPhase === 'completed') {
                 document.getElementById('phase2').classList.add('completed');
-                document.getElementById('phase3').classList.add('active');
+                document.getElementById('phase2').querySelector('.phase-status').textContent =
+                    investigation.rootCause ? 'Found' : 'Done';
             }
-            if (phaseIndex >= 5) { // completed
-                document.getElementById('phase3').classList.remove('active');
+
+            // Phase 3: Creating Fix
+            if (currentPhase === 'creating_fix') {
+                document.getElementById('phase3').classList.add('active');
+                document.getElementById('phase3').querySelector('.phase-status').textContent =
+                    investigation.remediation ? `${investigation.remediation.length} actions` : '';
+            } else if (currentPhase === 'completed') {
                 document.getElementById('phase3').classList.add('completed');
+                document.getElementById('phase3').querySelector('.phase-status').textContent = 'Done';
+            }
+
+            // Phase 4: PR Created
+            if (currentPhase === 'completed' || investigation.prUrl) {
                 document.getElementById('phase4').classList.add('completed');
+                document.getElementById('phase4').querySelector('.phase-status').textContent =
+                    investigation.prUrl ? 'Created' : 'Done';
             }
         }
 

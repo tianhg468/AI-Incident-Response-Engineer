@@ -145,10 +145,31 @@ def get_approvals_data():
     return []
 
 
+def get_agent_investigation_log():
+    """Get agent investigation log from webhook pod."""
+    try:
+        # Get webhook pod name
+        pod_output = run_kubectl("get pod -l app=agent-webhook -o jsonpath='{.items[0].metadata.name}'")
+        pod_name = pod_output.strip().strip("'")
+
+        if not pod_name or 'Error' in pod_name:
+            return None
+
+        # Read agent investigation log
+        log_output = run_kubectl(f"exec {pod_name} -- cat /app/data/agent_investigation.log 2>/dev/null")
+
+        if log_output and 'Error' not in log_output and 'No such file' not in log_output:
+            return log_output
+    except:
+        pass
+
+    return None
+
+
 def get_webhook_logs():
-    """Get recent webhook logs."""
-    output = run_kubectl("logs deployment/agent-webhook --tail=200")
-    lines = output.split('\n')
+    """Get recent webhook logs and parse agent investigation."""
+    # Get agent investigation log
+    agent_log = get_agent_investigation_log()
 
     # Parse for agent investigation details
     investigation = {
@@ -156,78 +177,72 @@ def get_webhook_logs():
         'phase': 'idle',
         'evidence': [],
         'hypotheses': [],
+        'verification': [],
         'rootCause': None,
-        'fix': None,
+        'remediation': [],
         'prUrl': None,
         'allLogs': []
     }
 
-    current_phase = None
+    if agent_log:
+        lines = agent_log.split('\n')
+        investigation['active'] = True
+        current_phase = None
 
-    for line in lines:
-        # Filter out health check logs and Flask server noise
-        if any(skip in line for skip in [
-            'GET /health HTTP/1.1',
-            '10.0.93.144',
-            '10.0.118.207',
-            'WARNING: This is a development server',
-            'Running on http://',
-            'Press CTRL+C to quit'
-        ]):
-            continue
+        for line in lines:
+            if not line.strip():
+                continue
 
-        # Store all logs (excluding health checks)
-        if line.strip():
+            # Store all logs
             investigation['allLogs'].append({
                 'timestamp': datetime.now().isoformat(),
                 'message': line.strip()
             })
 
-        # Detect investigation start
-        if '🤖 Triggering AI agent' in line:
-            investigation['active'] = True
-            investigation['phase'] = 'investigating'
+            # Detect phases
+            if 'PHASE 1' in line or 'Evidence Gathering' in line or '🔍 Gathering evidence' in line:
+                current_phase = 'evidence'
+                investigation['phase'] = 'gathering_evidence'
 
-        # Parse evidence gathering
-        if '🔍' in line or 'PHASE 1' in line or 'Evidence Gathering' in line:
-            current_phase = 'evidence'
-            investigation['phase'] = 'gathering_evidence'
+            elif 'PHASE 2' in line or 'Hypothesis Formation' in line or '🧠 Forming hypotheses' in line:
+                current_phase = 'hypothesis'
+                investigation['phase'] = 'analyzing'
 
-        if current_phase == 'evidence':
-            if '✓' in line or 'Found' in line or 'Detected' in line:
-                investigation['evidence'].append(line.strip())
+            elif 'PHASE 3' in line or 'Verification' in line or '✓ Verifying' in line:
+                current_phase = 'verification'
+                investigation['phase'] = 'analyzing'
 
-        # Parse hypothesis generation
-        if '🧠' in line or 'PHASE 2' in line or 'Root Cause' in line or 'hypothesis' in line.lower():
-            current_phase = 'analysis'
-            investigation['phase'] = 'analyzing'
+            elif 'PHASE 4' in line or 'Remediation' in line or '📝 Creating remediation' in line:
+                current_phase = 'remediation'
+                investigation['phase'] = 'creating_fix'
 
-        if current_phase == 'analysis':
-            if 'H1:' in line or 'H2:' in line or 'H3:' in line:
-                investigation['hypotheses'].append(line.strip())
-            if 'CONFIRMED' in line or 'Root cause:' in line:
-                investigation['rootCause'] = line.strip()
+            # Parse content by phase
+            if current_phase == 'evidence':
+                if any(marker in line for marker in ['Found:', 'Detected:', 'Observed:', '•', '-']):
+                    investigation['evidence'].append(line.strip())
 
-        # Parse fix creation
-        if '📝' in line or 'PHASE 3' in line or 'Creating Fix' in line or 'Creating PR' in line:
-            current_phase = 'fixing'
-            investigation['phase'] = 'creating_fix'
+            elif current_phase == 'hypothesis':
+                if any(marker in line for marker in ['Hypothesis', 'H1:', 'H2:', 'H3:', '•', '-']):
+                    investigation['hypotheses'].append(line.strip())
 
-        if current_phase == 'fixing':
-            if 'Branch:' in line or 'Files changed:' in line or 'Changes:' in line:
-                if not investigation['fix']:
-                    investigation['fix'] = []
-                investigation['fix'].append(line.strip())
-            if 'PR created:' in line or 'https://github.com' in line:
-                # Extract PR URL
-                import re
-                url_match = re.search(r'https://github\.com[^\s]+', line)
-                if url_match:
-                    investigation['prUrl'] = url_match.group(0)
+            elif current_phase == 'verification':
+                if any(marker in line for marker in ['Verified:', 'Confirmed:', 'Testing:', '✓', '•', '-']):
+                    investigation['verification'].append(line.strip())
+                if 'ROOT CAUSE' in line.upper() or 'Root cause:' in line:
+                    investigation['rootCause'] = line.strip()
 
-        # Detect completion
-        if 'Investigation complete' in line or '🎉' in line:
-            investigation['phase'] = 'completed'
+            elif current_phase == 'remediation':
+                if any(marker in line for marker in ['Action:', 'Fix:', 'Change:', '•', '-']):
+                    investigation['remediation'].append(line.strip())
+                if 'PR created:' in line or 'https://github.com' in line:
+                    import re
+                    url_match = re.search(r'https://github\.com[^\s]+', line)
+                    if url_match:
+                        investigation['prUrl'] = url_match.group(0)
+
+            # Detect completion
+            if 'Investigation complete' in line or 'COMPLETED' in line or '🎉' in line:
+                investigation['phase'] = 'completed'
 
     return investigation
 
