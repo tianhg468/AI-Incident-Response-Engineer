@@ -6,27 +6,41 @@ with the proposed changes for human review and approval in GitHub.
 
 import os
 import json
-import subprocess
+import base64
 import logging
+import time
 from typing import Optional
-from pathlib import Path
 
 import requests
+import yaml
 
 logger = logging.getLogger(__name__)
 
 
 class GitHubPRCreator:
-    """Creates GitHub PRs with remediation changes."""
+    """Creates GitHub PRs with remediation changes using GitHub API."""
 
-    def __init__(self):
+    def __init__(self, service: Optional[str] = None):
         self.github_token = os.getenv("GITHUB_TOKEN")
         self.github_org = os.getenv("GITHUB_ORG", "tianhg468")
-        self.repo_name = os.getenv("GITHUB_REPO", "agentic_ai")
-        self.repo_path = Path(__file__).parent.parent.parent  # Root of repo
+
+        # Map services to their repositories
+        # demo-app is a submodule in a separate repo
+        if service == "demo-app":
+            self.repo_name = "ai-incident-response-demo"
+        else:
+            self.repo_name = os.getenv("GITHUB_REPO", "agentic_ai")
+
+        self.base_branch = "main"
+        self.api_base = f"https://api.github.com/repos/{self.github_org}/{self.repo_name}"
 
         if not self.github_token:
             logger.warning("GITHUB_TOKEN not set - PR creation will fail")
+
+        self.headers = {
+            "Authorization": f"Bearer {self.github_token}",
+            "Accept": "application/vnd.github.v3+json"
+        }
 
     def create_rollback_pr(
         self,
@@ -36,7 +50,7 @@ class GitHubPRCreator:
         target_memory: str,
         incident_summary: str
     ) -> dict:
-        """Create a PR to rollback deployment configuration.
+        """Create a PR to rollback deployment configuration using GitHub API.
 
         Args:
             service: Service name (e.g., "demo-app")
@@ -49,23 +63,41 @@ class GitHubPRCreator:
             PR creation result with PR URL
         """
         try:
-            # 1. Create a new branch
             branch_name = f"ai-agent/rollback-{service}-{int(time.time())}"
-            self._create_branch(branch_name)
+            # Path within the service's repository (not including the service name)
+            deployment_path = "k8s/deployment.yaml"
 
-            # 2. Make the changes
-            deployment_file = self.repo_path / "demo-app" / "k8s" / "deployment.yaml"
-            self._update_deployment_yaml(deployment_file, target_memory)
+            logger.info(f"Creating PR to rollback {service} memory to {target_memory}")
 
-            # 3. Commit the changes
+            # 1. Get the base branch SHA
+            base_sha = self._get_branch_sha(self.base_branch)
+            logger.info(f"Base branch '{self.base_branch}' SHA: {base_sha}")
+
+            # 2. Get current deployment.yaml content from GitHub
+            file_content, file_sha = self._get_file_content(deployment_path, self.base_branch)
+            logger.info(f"Retrieved {deployment_path} (SHA: {file_sha})")
+
+            # 3. Update the deployment YAML with new memory limit
+            updated_content = self._update_deployment_memory(file_content, target_memory)
+
+            # 4. Create new branch from base
+            self._create_branch_api(branch_name, base_sha)
+            logger.info(f"Created branch: {branch_name}")
+
+            # 5. Commit the updated file to new branch
             commit_message = f"🤖 Rollback {service} memory limit to {target_memory}\n\nAI Agent detected OOM incidents caused by low memory limit ({current_memory}).\nRolling back to revision {target_revision} with {target_memory} limit.\n\nIncident: {incident_summary}"
-            self._commit_changes(deployment_file, commit_message)
 
-            # 4. Push the branch
-            self._push_branch(branch_name)
+            self._update_file_api(
+                path=deployment_path,
+                content=updated_content,
+                message=commit_message,
+                branch=branch_name,
+                sha=file_sha
+            )
+            logger.info(f"Committed changes to {branch_name}")
 
-            # 5. Create the PR
-            pr_url = self._create_pr(
+            # 6. Create the PR
+            pr_url = self._create_pr_api(
                 branch_name=branch_name,
                 title=f"🤖 [AI Agent] Rollback {service} to fix OOM incidents",
                 body=self._build_pr_body(service, target_revision, current_memory, target_memory, incident_summary)
@@ -86,17 +118,38 @@ class GitHubPRCreator:
                 "error": str(e)
             }
 
-    def _create_branch(self, branch_name: str):
-        """Create a new Git branch."""
-        subprocess.run(["git", "checkout", "-b", branch_name], cwd=self.repo_path, check=True)
-        logger.info(f"Created branch: {branch_name}")
+    def _get_branch_sha(self, branch_name: str) -> str:
+        """Get the SHA of a branch."""
+        url = f"{self.api_base}/git/refs/heads/{branch_name}"
+        response = requests.get(url, headers=self.headers)
+        response.raise_for_status()
+        return response.json()["object"]["sha"]
 
-    def _update_deployment_yaml(self, deployment_file: Path, target_memory: str):
-        """Update the deployment YAML file with new memory limit."""
-        import yaml
+    def _get_file_content(self, path: str, branch: str) -> tuple[str, str]:
+        """Get file content from GitHub.
 
-        with open(deployment_file, 'r') as f:
-            deployment = yaml.safe_load(f)
+        Returns:
+            Tuple of (decoded_content, file_sha)
+        """
+        url = f"{self.api_base}/contents/{path}?ref={branch}"
+        response = requests.get(url, headers=self.headers)
+        response.raise_for_status()
+
+        data = response.json()
+        content = base64.b64decode(data["content"]).decode("utf-8")
+        return content, data["sha"]
+
+    def _update_deployment_memory(self, yaml_content: str, target_memory: str) -> str:
+        """Update deployment YAML with new memory limit.
+
+        Args:
+            yaml_content: Original YAML content
+            target_memory: Target memory limit (e.g., "256Mi")
+
+        Returns:
+            Updated YAML content as string
+        """
+        deployment = yaml.safe_load(yaml_content)
 
         # Update memory limits
         containers = deployment['spec']['template']['spec']['containers']
@@ -108,25 +161,35 @@ class GitHubPRCreator:
                     container['resources']['requests']['memory'] = "128Mi"
                 elif target_memory == "512Mi":
                     container['resources']['requests']['memory'] = "256Mi"
+                elif target_memory == "128Mi":
+                    container['resources']['requests']['memory'] = "64Mi"
 
-        with open(deployment_file, 'w') as f:
-            yaml.dump(deployment, f, default_flow_style=False)
+        return yaml.dump(deployment, default_flow_style=False, sort_keys=False)
 
-        logger.info(f"Updated {deployment_file} with memory limit: {target_memory}")
+    def _create_branch_api(self, branch_name: str, base_sha: str):
+        """Create a new branch via GitHub API."""
+        url = f"{self.api_base}/git/refs"
+        data = {
+            "ref": f"refs/heads/{branch_name}",
+            "sha": base_sha
+        }
+        response = requests.post(url, headers=self.headers, json=data)
+        response.raise_for_status()
 
-    def _commit_changes(self, file_path: Path, commit_message: str):
-        """Commit changes to Git."""
-        subprocess.run(["git", "add", str(file_path)], cwd=self.repo_path, check=True)
-        subprocess.run(["git", "commit", "-m", commit_message], cwd=self.repo_path, check=True)
-        logger.info(f"Committed changes: {commit_message.split(chr(10))[0]}")
+    def _update_file_api(self, path: str, content: str, message: str, branch: str, sha: str):
+        """Update a file via GitHub API."""
+        url = f"{self.api_base}/contents/{path}"
+        data = {
+            "message": message,
+            "content": base64.b64encode(content.encode()).decode(),
+            "sha": sha,
+            "branch": branch
+        }
+        response = requests.put(url, headers=self.headers, json=data)
+        response.raise_for_status()
 
-    def _push_branch(self, branch_name: str):
-        """Push branch to GitHub."""
-        subprocess.run(["git", "push", "origin", branch_name], cwd=self.repo_path, check=True)
-        logger.info(f"Pushed branch: {branch_name}")
-
-    def _create_pr(self, branch_name: str, title: str, body: str) -> str:
-        """Create a PR on GitHub.
+    def _create_pr_api(self, branch_name: str, title: str, body: str) -> str:
+        """Create a PR via GitHub API.
 
         Args:
             branch_name: Source branch name
@@ -136,21 +199,15 @@ class GitHubPRCreator:
         Returns:
             PR URL
         """
-        url = f"https://api.github.com/repos/{self.github_org}/{self.repo_name}/pulls"
-
-        headers = {
-            "Authorization": f"Bearer {self.github_token}",
-            "Accept": "application/vnd.github.v3+json"
-        }
-
+        url = f"{self.api_base}/pulls"
         data = {
             "title": title,
             "body": body,
             "head": branch_name,
-            "base": "main"
+            "base": self.base_branch
         }
 
-        response = requests.post(url, headers=headers, json=data)
+        response = requests.post(url, headers=self.headers, json=data)
         response.raise_for_status()
 
         pr_data = response.json()
@@ -199,9 +256,6 @@ Once approved and merged, GitHub Actions will automatically deploy this fix to t
 """
 
 
-import time  # For timestamp in branch name
-
-
 def create_remediation_pr(
     service: str,
     action_type: str,
@@ -219,7 +273,7 @@ def create_remediation_pr(
     Returns:
         PR creation result
     """
-    pr_creator = GitHubPRCreator()
+    pr_creator = GitHubPRCreator(service=service)
 
     # Extract details from evidence
     recent_deploys = evidence.get("recent_deploys", [])

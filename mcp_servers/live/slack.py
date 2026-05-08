@@ -128,28 +128,33 @@ class LiveSlackMCPServer:
 
     def _request_approval(self, arguments: dict[str, Any]) -> dict[str, Any]:
         """Request approval via Slack."""
+        import time
+
         action_type = arguments.get("action_type", "")
         description = arguments.get("description", "")
 
-        # Request approval using live client
-        result = self.client.request_approval(action_type, description)
+        # Generate approval_id FIRST (before posting to Slack)
+        # This allows us to embed it in the button value
+        approval_id = str(time.time())
 
-        # If successful, register the approval with the approval manager
-        approval_id = result.get("ts")  # Use Slack message timestamp as ID
+        # Register approval with manager BEFORE posting to Slack
+        # This ensures the approval exists when the button is clicked
+        from webhook.approval_manager import get_approval_manager
+        manager = get_approval_manager()
+        manager.create_approval(
+            approval_id=approval_id,
+            action_type=action_type,
+            description=description
+        )
 
-        if result.get("success") and approval_id:
-            from webhook.approval_manager import get_approval_manager
-            manager = get_approval_manager()
-            manager.create_approval(
-                approval_id=approval_id,
-                action_type=action_type,
-                description=description
-            )
+        # Now request approval using live client WITH the approval_id
+        result = self.client.request_approval(action_type, description, approval_id=approval_id)
 
         return {
             "success": result.get("success", False),
+            "ok": result.get("success", False),  # Add 'ok' for compatibility
             "channel": self.client.channel,
-            "ts": approval_id,
+            "ts": result.get("ts"),
             "approval_id": approval_id,
             "error": result.get("error"),
             "message": f"Approval request posted for: {action_type}"

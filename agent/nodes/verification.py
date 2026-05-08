@@ -179,11 +179,58 @@ def _run_verification_checks(checks: list[str], incident: dict, evidence: dict) 
                     "summary": f"Found {len(deployments)} deployment(s)"
                 })
 
-            elif "memory" in check_lower or "resource" in check_lower:
-                # Check pod resource limits
-                pods = evidence.get("pod_status", {}).get("pods", [])
+            elif "memory" in check_lower or "resource" in check_lower or "limit" in check_lower:
+                # Check resource limits from both deployment and pods
                 resource_info = []
 
+                # First, get current deployment spec (most reliable)
+                print(f"   [DEBUG] Querying deployment {service} for resource limits")
+                try:
+                    deployment_result = mcp.get_deployments(deployment_name=service)
+                    deployments = deployment_result.get("deployments", [])
+                    print(f"   [DEBUG] Retrieved {len(deployments)} deployment(s)")
+
+                    if deployments:
+                        deployment = deployments[0]
+                        print(f"   [DEBUG] Deployment object keys: {list(deployment.keys())}")
+
+                        # Extract resource limits from deployment spec
+                        spec = deployment.get("spec", {})
+                        template = spec.get("template", {})
+                        template_spec = template.get("spec", {})
+                        containers = template_spec.get("containers", [])
+
+                        print(f"   [DEBUG] Found {len(containers)} container(s) in deployment spec")
+
+                        if not containers:
+                            # Try alternative path in case of different structure
+                            print(f"   [DEBUG] Trying alternative container path...")
+                            print(f"   [DEBUG] Deployment keys: {list(deployment.keys())}")
+                            if "template" in deployment:
+                                print(f"   [DEBUG] Template keys: {list(deployment['template'].keys())}")
+
+                        for container in containers:
+                            resources = container.get("resources", {})
+                            limits = resources.get("limits", {})
+                            requests = resources.get("requests", {})
+
+                            if limits or requests:
+                                resource_info.append({
+                                    "source": "deployment_spec",
+                                    "deployment": service,
+                                    "container": container.get("name"),
+                                    "limits": limits,
+                                    "requests": requests
+                                })
+                                print(f"   [DEBUG] ✓ Deployment {service} container {container.get('name')}: memory limit={limits.get('memory')}, request={requests.get('memory')}")
+                            else:
+                                print(f"   [DEBUG] ✗ Container {container.get('name')} has no resource limits/requests defined")
+                except Exception as e:
+                    logger.error(f"Failed to get deployment spec: {e}", exc_info=True)
+                    print(f"   [DEBUG] ERROR getting deployment spec: {e}")
+
+                # Also check pods if available
+                pods = evidence.get("pod_status", {}).get("pods", [])
                 print(f"   [DEBUG] Checking resources for {len(pods)} pods")
 
                 for pod in pods[:3]:  # Check first 3 pods
@@ -193,18 +240,18 @@ def _run_verification_checks(checks: list[str], incident: dict, evidence: dict) 
                         limits = resources.get("limits", {})
                         requests = resources.get("requests", {})
                         resource_info.append({
+                            "source": "pod_spec",
                             "pod": pod.get("metadata", {}).get("name"),
                             "container": container.get("name"),
                             "limits": limits,
                             "requests": requests
                         })
-                        print(f"   [DEBUG] Pod {pod.get('metadata', {}).get('name')}: memory limit={limits.get('memory')}, request={requests.get('memory')}")
 
                 check_results.append({
                     "check": check,
                     "type": "resource_limits",
                     "data": resource_info,
-                    "summary": f"Checked resources for {len(resource_info)} container(s)"
+                    "summary": f"Checked resources for {len(resource_info)} container(s) from deployment and pods"
                 })
 
             elif "event" in check_lower or "oom" in check_lower:
@@ -286,6 +333,37 @@ def _build_verification_prompt(
     for check in verification_evidence:
         verification_summary.append(f"- {check['check']}: {check['summary']}")
 
+    # Format original evidence with details
+    pods = evidence.get('pod_status', {}).get('pods', [])
+    events = evidence.get('pod_status', {}).get('events', [])
+    recent_deploys = evidence.get('recent_deploys', [])
+    github_commits = evidence.get('github_activity', {}).get('commits', [])
+
+    # Get OOM-related events
+    oom_events = [e for e in events if 'oom' in e.get('reason', '').lower() or 'oom' in e.get('message', '').lower()]
+
+    # Format deployment changes
+    deploy_details = []
+    for deploy in recent_deploys[:3]:
+        changes = deploy.get('changes', [])
+        if changes:
+            deploy_details.append({
+                'revision': deploy.get('revision'),
+                'image': deploy.get('image'),
+                'deployedAt': deploy.get('deployedAt'),
+                'changes': [{'field': c.get('field'), 'old': c.get('old'), 'new': c.get('new')} for c in changes[:5]]
+            })
+
+    # Format GitHub commits
+    commit_details = []
+    for commit in github_commits[:5]:
+        commit_details.append({
+            'sha': commit.get('sha', '')[:7],
+            'message': commit.get('message', ''),
+            'author': commit.get('author', ''),
+            'date': commit.get('date', '')
+        })
+
     prompt = f"""Verify this hypothesis about a production incident.
 
 **Hypothesis:**
@@ -298,15 +376,22 @@ def _build_verification_prompt(
 - Service: {incident.get('service')}
 - Description: {incident.get('description')}
 
-**Original Evidence Summary:**
-- Pods: {len(evidence.get('pod_status', {}).get('pods', []))} total
-- Events: {len(evidence.get('pod_status', {}).get('events', []))} total
-- Recent Deploys: {len(evidence.get('recent_deploys', []))}
+**Original Evidence Collected:**
+
+Pods: {len(pods)} total
+OOM Events: {len(oom_events)} events
+{json.dumps(oom_events[:5], indent=2) if oom_events else "None"}
+
+Recent Deployments: {len(recent_deploys)} total
+{json.dumps(deploy_details, indent=2) if deploy_details else "No deployment changes recorded"}
+
+GitHub Commits: {len(github_commits)} total
+{json.dumps(commit_details, indent=2) if commit_details else "No commits available"}
 
 **Verification Checks Performed:**
 {chr(10).join(verification_summary)}
 
-**Detailed Verification Evidence:**
+**Additional Verification Evidence:**
 {json.dumps(verification_evidence, indent=2)}
 
 **Instructions:**

@@ -1,0 +1,27 @@
+## Prometheus values for AI Agent integration
+## This configures AlertManager to send alerts to the AI agent webhook
+
+alertmanager:
+  config:
+    route:
+      group_by: ['namespace', 'alertname']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 1h
+      receiver: 'ai-agent-webhook'
+    receivers:
+      - name: 'ai-agent-webhook'
+        webhook_configs:
+          - url: 'http://agent-webhook.default.svc.cluster.local:8080/alerts'
+            send_resolved: true
+            http_config:
+              bearer_token: '6e7f89425d62ca54ce89dc5857eeac4ed570dd2531d996c477f5a6fb72bace30'
+    inhibit_rules:
+      - source_matchers: [severity="critical"]
+        target_matchers: [severity="warning"]
+        equal: [alertname, dev, instance]
+
+# Allow Prometheus to discover all ServiceMonitors
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false

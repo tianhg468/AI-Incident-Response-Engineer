@@ -272,9 +272,13 @@ class LiveSlackClient:
         except Exception as e:
             return {"error": str(e), "success": False}
 
-    def request_approval(self, action_type: str, description: str) -> dict[str, Any]:
+    def request_approval(self, action_type: str, description: str, approval_id: str = None) -> dict[str, Any]:
         """Request approval via Slack with interactive buttons."""
         try:
+            # Use approval_id as button value, fallback to generic strings
+            approve_value = approval_id if approval_id else "approve"
+            reject_value = approval_id if approval_id else "reject"
+
             blocks = [
                 {
                     "type": "header",
@@ -300,7 +304,7 @@ class LiveSlackClient:
                                 "text": "✅ Approve"
                             },
                             "style": "primary",
-                            "value": "approve",
+                            "value": approve_value,
                             "action_id": "approve_action"
                         },
                         {
@@ -310,7 +314,7 @@ class LiveSlackClient:
                                 "text": "❌ Reject"
                             },
                             "style": "danger",
-                            "value": "reject",
+                            "value": reject_value,
                             "action_id": "reject_action"
                         },
                         {
@@ -319,7 +323,7 @@ class LiveSlackClient:
                                 "type": "plain_text",
                                 "text": "🔄 Reject with Feedback"
                             },
-                            "value": "reject_with_feedback",
+                            "value": reject_value,
                             "action_id": "reject_with_feedback_action"
                         }
                     ]
