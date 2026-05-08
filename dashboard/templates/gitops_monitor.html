@@ -454,33 +454,6 @@
         </div>
     </div>
 
-    <div class="grid">
-        <!-- GitHub Pull Requests -->
-        <div class="card">
-            <div class="card-header">
-                <div class="card-title">
-                    🔀 Pull Requests
-                    <span class="badge info" id="prCount">0</span>
-                </div>
-            </div>
-            <div id="pullRequests">
-                <div class="empty-state loading">Loading PRs...</div>
-            </div>
-        </div>
-
-        <!-- GitHub Actions -->
-        <div class="card">
-            <div class="card-header">
-                <div class="card-title">
-                    ⚡ GitHub Actions
-                </div>
-            </div>
-            <div id="githubActions">
-                <div class="empty-state loading">Loading workflows...</div>
-            </div>
-        </div>
-    </div>
-
     <div class="refresh-info">
         Refreshing every 5 seconds | Press Ctrl+R to refresh manually
     </div>
@@ -498,8 +471,6 @@
                     updatePods(data.pods);
                     updateAlerts(data.alerts);
                     updateInvestigations(data.investigations || []);
-                    updatePullRequests(data.pullRequests);
-                    updateGithubActions(data.githubActions);
 
                     const now = new Date();
                     document.getElementById('lastUpdate').textContent =
@@ -724,7 +695,10 @@
             }
 
             if (investigation.prUrl) {
-                detailsHTML += `<a href="${investigation.prUrl}" target="_blank" class="pr-link">🔗 View Pull Request on GitHub</a>`;
+                detailsHTML += '<div style="margin: 20px 0; padding: 15px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196F3;">';
+                detailsHTML += '<div style="font-weight: 600; margin-bottom: 8px;">🔗 Pull Request Created</div>';
+                detailsHTML += `<a href="${investigation.prUrl}" target="_blank" style="color: #1976D2; text-decoration: none; font-weight: 500;">View and Approve PR on GitHub →</a>`;
+                detailsHTML += '</div>';
             }
 
             // Display incident data
@@ -764,59 +738,6 @@
             return html;
         }
 
-
-        function updatePullRequests(prs) {
-            const container = document.getElementById('pullRequests');
-            document.getElementById('prCount').textContent = prs.length;
-
-            if (prs.length === 0) {
-                container.innerHTML = '<div class="empty-state">No open pull requests</div>';
-                return;
-            }
-
-            container.innerHTML = prs.map(pr => `
-                <div class="item ${pr.isAI ? 'ai-pr' : ''}">
-                    <div class="item-header">
-                        <div class="item-title">
-                            <a href="${pr.url}" target="_blank">#${pr.number} ${pr.title}</a>
-                        </div>
-                        ${pr.isAI ? '<span class="badge info">🤖 AI</span>' : ''}
-                    </div>
-                    <div class="item-meta">
-                        By ${pr.author} • ${new Date(pr.created).toLocaleString()}
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function updateGithubActions(runs) {
-            const container = document.getElementById('githubActions');
-
-            if (runs.length === 0) {
-                container.innerHTML = '<div class="empty-state">No recent workflow runs</div>';
-                return;
-            }
-
-            container.innerHTML = '<div class="timeline">' + runs.map(run => {
-                let badge = '<span class="badge info">In Progress</span>';
-                if (run.conclusion === 'success') badge = '<span class="badge success">Success</span>';
-                if (run.conclusion === 'failure') badge = '<span class="badge error">Failed</span>';
-
-                return `
-                    <div class="timeline-item">
-                        <div class="item-header">
-                            <div class="item-title">
-                                <a href="${run.url}" target="_blank">${run.name}</a>
-                            </div>
-                            ${badge}
-                        </div>
-                        <div class="item-meta">
-                            ${new Date(run.created).toLocaleString()}
-                        </div>
-                    </div>
-                `;
-            }).join('') + '</div>';
-        }
 
         function startCountdown() {
             countdown = 5;

@@ -285,68 +285,6 @@ def get_webhook_logs():
     return []
 
 
-def get_github_prs():
-    """Get open PRs from GitHub."""
-    if not GITHUB_TOKEN:
-        return []
-
-    try:
-        headers = {
-            'Authorization': f'token {GITHUB_TOKEN}',
-            'Accept': 'application/vnd.github.v3+json'
-        }
-        url = f'https://api.github.com/repos/{GITHUB_ORG}/{GITHUB_REPO}/pulls?state=open'
-        response = requests.get(url, headers=headers, timeout=5)
-
-        if response.status_code == 200:
-            prs = []
-            for pr in response.json():
-                prs.append({
-                    'number': pr['number'],
-                    'title': pr['title'],
-                    'author': pr['user']['login'],
-                    'created': pr['created_at'],
-                    'url': pr['html_url'],
-                    'isAI': '[AI Agent]' in pr['title'] or '🤖' in pr['title']
-                })
-            return prs
-    except Exception as e:
-        print(f"Error fetching PRs: {e}")
-
-    return []
-
-
-def get_github_actions():
-    """Get recent GitHub Actions workflow runs."""
-    if not GITHUB_TOKEN:
-        return []
-
-    try:
-        headers = {
-            'Authorization': f'token {GITHUB_TOKEN}',
-            'Accept': 'application/vnd.github.v3+json'
-        }
-        url = f'https://api.github.com/repos/{GITHUB_ORG}/{GITHUB_REPO}/actions/runs?per_page=5'
-        response = requests.get(url, headers=headers, timeout=5)
-
-        if response.status_code == 200:
-            runs = []
-            for run in response.json().get('workflow_runs', []):
-                runs.append({
-                    'id': run['id'],
-                    'name': run['name'],
-                    'status': run['status'],
-                    'conclusion': run['conclusion'],
-                    'created': run['created_at'],
-                    'url': run['html_url']
-                })
-            return runs
-    except Exception as e:
-        print(f"Error fetching actions: {e}")
-
-    return []
-
-
 @app.route('/')
 def index():
     """Render the dashboard."""
@@ -398,9 +336,7 @@ def status():
         'timestamp': datetime.now().isoformat(),
         'pods': get_pod_status(),
         'alerts': alerts,
-        'investigations': investigations_list,  # Changed from single agentInvestigation to multiple
-        'pullRequests': get_github_prs(),
-        'githubActions': get_github_actions()
+        'investigations': investigations_list  # Changed from single agentInvestigation to multiple
     })
 
 

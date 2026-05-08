@@ -96,7 +96,21 @@ def evidence_gathering_node(state: AgentState) -> AgentState:
 
     # 5. GitHub activity
     print("  ├─ Getting GitHub activity...")
-    repo = f"myorg/{service}"  # TODO: Make configurable
+
+    # Map service to its deployment repository
+    import os
+    github_org = os.getenv("GITHUB_ORG", "tianhg468")
+
+    # Service-specific repository mapping for GitOps deployments
+    service_repo_map = {
+        "demo-app": f"{github_org}/ai-incident-response-demo",
+        # Add more service mappings as needed
+    }
+
+    # Try to get service-specific repo, fallback to agent repo
+    repo = service_repo_map.get(service, f"{github_org}/{os.getenv('GITHUB_REPO', 'agentic_ai')}")
+    print(f"     Querying GitHub repo: {repo}")
+
     commits_result = mcp.get_recent_commits(repo=repo, limit=10)
     commits = commits_result.get("commits", [])
 

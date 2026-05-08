@@ -95,7 +95,19 @@ def process_alert(alert: dict):
     alert_name = labels.get("alertname", "unknown")
     alert_type = labels.get("alert_type", "unknown")
     severity = labels.get("severity", "unknown")
-    service = labels.get("service") or labels.get("pod", "unknown").split("-")[0]
+
+    # For pod-level alerts (OOMKilled, CrashLoop), extract service from pod name
+    # The "service" label refers to the monitoring system, not the affected pod
+    if alert_name in ["PodOOMKilled", "PodCrashLooping", "PodCrashLoop"]:
+        pod_name = labels.get("pod", "")
+        if pod_name:
+            # Pod name format: {service}-{replicaset-hash}-{pod-hash}
+            service = "-".join(pod_name.split("-")[:-2]) if "-" in pod_name else pod_name
+        else:
+            service = "unknown"
+    else:
+        # For other alerts, use service label or extract from pod name
+        service = labels.get("service") or labels.get("pod", "unknown").split("-")[0]
 
     print(f"\n📋 Alert Details:")
     print(f"   Name: {alert_name}")
@@ -203,8 +215,18 @@ def verify_slack_signature(request):
     slack_signature = request.headers.get("X-Slack-Signature", "")
     slack_timestamp = request.headers.get("X-Slack-Request-Timestamp", "")
 
+    # Check if required headers are present
+    if not slack_signature or not slack_timestamp:
+        print("⚠️  Missing Slack signature headers, rejecting request")
+        return False
+
     # Prevent replay attacks
-    if abs(time.time() - int(slack_timestamp)) > 60 * 5:
+    try:
+        if abs(time.time() - int(slack_timestamp)) > 60 * 5:
+            print("⚠️  Slack request timestamp too old, rejecting")
+            return False
+    except ValueError:
+        print("⚠️  Invalid Slack timestamp format, rejecting")
         return False
 
     # Verify the signature
@@ -221,66 +243,98 @@ def verify_slack_signature(request):
 @app.route("/slack/interactions", methods=["POST"])
 def slack_interactions():
     """Handle Slack interactive component events (button clicks)."""
+    try:
+        print("\n📨 Received Slack interaction request")
 
-    # Verify the request came from Slack
-    if not verify_slack_signature(request):
-        print("❌ Invalid Slack signature")
-        return jsonify({"error": "Invalid signature"}), 403
+        # Verify the request came from Slack
+        if not verify_slack_signature(request):
+            print("❌ Invalid Slack signature")
+            return jsonify({"error": "Invalid signature"}), 403
 
-    # Parse the payload
-    payload = json.loads(request.form.get("payload", "{}"))
+        # Parse the payload
+        payload_str = request.form.get("payload", "{}")
+        print(f"   Payload length: {len(payload_str)} bytes")
+        payload = json.loads(payload_str)
 
-    # Log the interaction
-    print(f"\n📨 Received Slack interaction:")
-    print(f"   Type: {payload.get('type')}")
-    print(f"   User: {payload.get('user', {}).get('name')}")
+        # Log the interaction
+        print(f"   Type: {payload.get('type')}")
+        print(f"   User: {payload.get('user', {}).get('name')}")
 
-    # Handle block actions (button clicks)
-    if payload.get("type") == "block_actions":
-        return handle_block_actions(payload)
+        # Handle block actions (button clicks)
+        if payload.get("type") == "block_actions":
+            return handle_block_actions(payload)
 
-    return jsonify({"status": "ok"})
+        return jsonify({"status": "ok"})
+
+    except Exception as e:
+        print(f"❌ ERROR in slack_interactions: {e}")
+        logging.error(f"Slack interaction error: {e}", exc_info=True)
+        # Return 200 to prevent Slack from retrying
+        return jsonify({"error": str(e)}), 200
 
 
 def handle_block_actions(payload):
     """Handle button clicks from Slack messages."""
-    actions = payload.get("actions", [])
-    user = payload.get("user", {})
+    try:
+        actions = payload.get("actions", [])
+        user = payload.get("user", {})
+        username = user.get('name', 'slack_user')
 
-    for action in actions:
-        action_id = action.get("action_id")
-        action_value = action.get("value")
+        print(f"   Processing {len(actions)} action(s) from user {username}")
 
-        print(f"   Action: {action_id} = {action_value}")
+        for action in actions:
+            action_id = action.get("action_id")
+            action_value = action.get("value")
 
-        # Handle approval actions
-        if action_id == "approve_action":
-            approval_id = action_value
-            approval_manager.approve(
-                approval_id,
-                approved_by=user.get('name', 'slack_user')
-            )
-            print(f"   ✅ Approved: {approval_id}")
+            print(f"   Action: {action_id} = {action_value}")
 
-            return jsonify({
-                "text": f"✅ Approved by {user.get('name')}",
-                "replace_original": True
-            })
+            # Handle approval actions
+            if action_id == "approve_action":
+                approval_id = action_value
+                try:
+                    approval_manager.approve(
+                        approval_id,
+                        approved_by=username
+                    )
+                    print(f"   ✅ Approved: {approval_id}")
 
-        elif action_id == "reject_action":
-            approval_id = action_value
-            approval_manager.reject(
-                approval_id,
-                rejected_by=user.get('name', 'slack_user')
-            )
-            print(f"   ❌ Rejected: {approval_id}")
+                    return jsonify({
+                        "text": f"✅ Approved by {username}",
+                        "replace_original": True
+                    })
+                except Exception as e:
+                    print(f"   ❌ ERROR approving: {e}")
+                    return jsonify({
+                        "text": f"❌ Error approving: {str(e)}",
+                        "replace_original": False
+                    })
 
-            return jsonify({
-                "text": f"❌ Rejected by {user.get('name')}",
-                "replace_original": True
-            })
+            elif action_id == "reject_action":
+                approval_id = action_value
+                try:
+                    approval_manager.reject(
+                        approval_id,
+                        rejected_by=username
+                    )
+                    print(f"   ❌ Rejected: {approval_id}")
 
-    return jsonify({"status": "ok"})
+                    return jsonify({
+                        "text": f"❌ Rejected by {username}",
+                        "replace_original": True
+                    })
+                except Exception as e:
+                    print(f"   ❌ ERROR rejecting: {e}")
+                    return jsonify({
+                        "text": f"❌ Error rejecting: {str(e)}",
+                        "replace_original": False
+                    })
+
+        return jsonify({"status": "ok"})
+
+    except Exception as e:
+        print(f"❌ ERROR in handle_block_actions: {e}")
+        logging.error(f"Block actions error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 200
 
 
 @app.route("/slack/events", methods=["POST"])

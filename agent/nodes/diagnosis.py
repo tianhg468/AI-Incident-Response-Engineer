@@ -179,7 +179,7 @@ Take this feedback into account when generating new hypotheses. Avoid the reject
 - Severity: {incident.get('severity')}
 - Alert Summary: {alert_summary}
 - Alert Description: {alert_description}
-- Triggered At: {incident.get('triggered_at')}
+- Time Window: {incident.get('time_window_start')} to {incident.get('time_window_end')}
 
 **Evidence:**
 

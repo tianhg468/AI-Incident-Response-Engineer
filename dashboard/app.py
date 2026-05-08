@@ -399,8 +399,9 @@ def render_live_investigation():
             st.markdown(f"- {item}")
 
     if investigation.get('prUrl'):
-        st.markdown(f"### 🔗 Pull Request")
-        st.markdown(f"[View PR on GitHub]({investigation['prUrl']})")
+        st.markdown("---")
+        st.markdown(f"### 🔗 Pull Request Created")
+        st.markdown(f"[View and Approve PR on GitHub →]({investigation['prUrl']})")
 
     # Full log
     if log_text:

@@ -316,6 +316,41 @@ if [ "$SKIP_FLUX" != "true" ]; then
     print_warning "Note: Demo app deployment may take 1-2 minutes as Flux syncs the repository"
 fi
 
+# Ensure demo-app Flux configuration is applied
+echo ""
+print_info "Checking demo-app Flux configuration..."
+
+# Wait a few seconds for Flux to sync initial manifests
+sleep 5
+
+if ! kubectl get gitrepository demo-app-repo -n flux-system &>/dev/null; then
+    print_warning "Demo-app GitRepository not found in cluster"
+    print_info "This happens when k8s/flux-demo-app.yaml isn't on the main branch yet"
+
+    if [ -f k8s/flux-demo-app.yaml ]; then
+        print_info "Applying k8s/flux-demo-app.yaml directly from local files..."
+        kubectl apply -f k8s/flux-demo-app.yaml
+        print_success "Demo-app Flux configuration applied"
+
+        # Wait for Flux to create the demo-app kustomization
+        print_info "Waiting for Flux to sync demo-app repository..."
+        for i in {1..30}; do
+            if kubectl get deployment demo-app -n default &>/dev/null; then
+                print_success "Demo-app deployment is ready!"
+                break
+            fi
+            echo -n "."
+            sleep 2
+        done
+        echo ""
+    else
+        print_error "k8s/flux-demo-app.yaml not found!"
+        print_info "Demo app will be deployed once you merge changes to main branch"
+    fi
+else
+    print_success "Demo-app Flux configuration already exists"
+fi
+
 echo ""
 echo "==========================================="
 echo "Step 6: Installing Prometheus Stack"
@@ -351,6 +386,7 @@ if [ "$SKIP_PROMETHEUS" != "true" ]; then
         helm install prometheus prometheus-community/kube-prometheus-stack \
           --namespace monitoring \
           --create-namespace \
+          --values prometheus/values.yaml \
           --wait
 
         print_success "Prometheus stack installed!"
@@ -364,46 +400,63 @@ if [ "$SKIP_PROMETHEUS" != "true" ]; then
     echo ""
     print_info "Configuring AlertManager to send alerts to webhook..."
 
-    # Update AlertManager config to route to webhook
-    kubectl get secret -n monitoring alertmanager-prometheus-kube-prometheus-alertmanager -o json | \
-      jq '.data["alertmanager.yaml"]' -r | base64 -d > /tmp/alertmanager.yaml
+    # Configure AlertManager with correct webhook configuration
+    # Always apply to ensure configuration is correct
+    print_info "Applying AlertManager configuration..."
 
-    # Check if webhook route already exists
-    if grep -q "ai-agent-webhook" /tmp/alertmanager.yaml; then
-        print_warning "AlertManager already configured for webhook"
-    else
-        # Add webhook receiver and route
-        cat > /tmp/alertmanager.yaml << EOF
+    cat > /tmp/alertmanager.yaml << EOF
 global:
   resolve_timeout: 5m
+
+inhibit_rules:
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal:
+      - alertname
+      - dev
+      - instance
+
 receivers:
-- name: "null"
-- name: "ai-agent-webhook"
-  webhook_configs:
-  - url: 'http://agent-webhook.default.svc.cluster.local:8080/alerts'
-    send_resolved: true
-    http_config:
-      bearer_token: '$WEBHOOK_SECRET'
+  - name: "ai-agent-webhook"
+    webhook_configs:
+      - url: 'http://agent-webhook.default.svc.cluster.local:8080/alerts'
+        send_resolved: true
+        http_config:
+          bearer_token: '$WEBHOOK_SECRET'
+
+  - name: "null"
+    # Discard watchdog alerts
+
 route:
-  group_by:
-  - namespace
-  - alertname
-  group_interval: 10s
-  group_wait: 10s
   receiver: "ai-agent-webhook"
+  group_by:
+    - namespace
+    - alertname
+  group_wait: 10s
+  group_interval: 10s
   repeat_interval: 1h
+  routes:
+    - matchers:
+        - alertname = "Watchdog"
+      receiver: "null"
 EOF
 
-        kubectl create secret generic alertmanager-prometheus-kube-prometheus-alertmanager \
-          --from-file=alertmanager.yaml=/tmp/alertmanager.yaml \
-          -n monitoring \
-          --dry-run=client -o yaml | kubectl apply -f -
+    kubectl create secret generic alertmanager-prometheus-kube-prometheus-alertmanager \
+      --from-file=alertmanager.yaml=/tmp/alertmanager.yaml \
+      -n monitoring \
+      --dry-run=client -o yaml | kubectl apply -f -
 
-        # Restart AlertManager to pick up new config
-        kubectl delete pod -n monitoring -l app.kubernetes.io/name=alertmanager
+    # Restart AlertManager to pick up new config
+    kubectl delete pod -n monitoring -l app.kubernetes.io/name=alertmanager 2>/dev/null || true
 
-        print_success "AlertManager configured"
-    fi
+    # Wait for AlertManager to be ready before continuing
+    print_info "Waiting for AlertManager to restart..."
+    kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=alertmanager -n monitoring --timeout=60s 2>/dev/null || \
+        echo "  Note: AlertManager may still be starting"
+
+    print_success "AlertManager configured"
 
     rm /tmp/alertmanager.yaml
 fi
@@ -433,14 +486,68 @@ echo "  kubectl port-forward svc/agent-webhook 8080:8080"
 echo "  Then: http://localhost:8080/health"
 echo ""
 
+# Start port-forward for webhook (needed for Slack ngrok tunnel)
+print_info "Setting up webhook port-forward for Slack integration..."
+if ps aux | grep -q "[k]ubectl port-forward.*agent-webhook.*8080:8080"; then
+    print_success "Webhook port-forward already running"
+else
+    kubectl port-forward svc/agent-webhook 8080:8080 > /tmp/webhook-port-forward.log 2>&1 &
+    PORTFORWARD_PID=$!
+    sleep 2
+    if ps -p $PORTFORWARD_PID > /dev/null 2>&1; then
+        print_success "Webhook port-forward started (PID: $PORTFORWARD_PID)"
+        echo "  Forwarding localhost:8080 -> agent-webhook:8080"
+        echo "  Logs: /tmp/webhook-port-forward.log"
+    else
+        print_warning "Failed to start port-forward, check /tmp/webhook-port-forward.log"
+    fi
+fi
+echo ""
+
 if [ "$SKIP_PROMETHEUS" != "true" ]; then
-    echo "Prometheus:"
-    echo "  kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090"
-    echo "  Then: http://localhost:9090"
+    # Start port-forward for Prometheus (needed for dashboard)
+    print_info "Setting up Prometheus port-forward for dashboard..."
+    if ps aux | grep -q "[k]ubectl port-forward.*prometheus.*9090:9090"; then
+        print_success "Prometheus port-forward already running"
+    else
+        kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090 > /tmp/prometheus-port-forward.log 2>&1 &
+        PROM_PID=$!
+        sleep 2
+        if ps -p $PROM_PID > /dev/null 2>&1; then
+            print_success "Prometheus port-forward started (PID: $PROM_PID)"
+            echo "  Forwarding localhost:9090 -> prometheus:9090"
+            echo "  Access: http://localhost:9090"
+            echo "  Logs: /tmp/prometheus-port-forward.log"
+        else
+            print_warning "Failed to start Prometheus port-forward, check /tmp/prometheus-port-forward.log"
+        fi
+    fi
     echo ""
-    echo "AlertManager:"
-    echo "  kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-alertmanager 9093:9093"
-    echo "  Then: http://localhost:9093"
+
+    # Start port-forward for AlertManager
+    print_info "Setting up AlertManager port-forward..."
+    if ps aux | grep -q "[k]ubectl port-forward.*alertmanager.*9093:9093"; then
+        print_success "AlertManager port-forward already running"
+    else
+        # Ensure AlertManager pod is ready before port-forwarding
+        if kubectl get pod -n monitoring -l app.kubernetes.io/name=alertmanager --field-selector=status.phase=Running 2>/dev/null | grep -q alertmanager; then
+            kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-alertmanager 9093:9093 > /tmp/alertmanager-port-forward.log 2>&1 &
+            AM_PID=$!
+            sleep 2
+            if ps -p $AM_PID > /dev/null 2>&1; then
+                print_success "AlertManager port-forward started (PID: $AM_PID)"
+                echo "  Forwarding localhost:9093 -> alertmanager:9093"
+                echo "  Access: http://localhost:9093"
+                echo "  Logs: /tmp/alertmanager-port-forward.log"
+            else
+                print_warning "Failed to start AlertManager port-forward, check /tmp/alertmanager-port-forward.log"
+            fi
+        else
+            print_warning "AlertManager pod not ready yet, skipping port-forward"
+            echo "  You can manually start it later with:"
+            echo "  kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-alertmanager 9093:9093"
+        fi
+    fi
     echo ""
 fi
 
